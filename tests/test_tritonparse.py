@@ -7,6 +7,7 @@ TORCHINDUCTOR_FX_GRAPH_CACHE=0 TRITONPARSE_DEBUG=1 python -m unittest tests.test
 """
 
 import gzip
+import importlib.util
 import json
 import os
 import shutil
@@ -33,6 +34,8 @@ from triton.compiler import ASTSource, IRSource
 # @manual=//triton:triton
 from triton.knobs import CompileTimes
 from tritonparse.structured_logging import convert, extract_python_source_info
+
+HAS_TRITON_KERNELS = importlib.util.find_spec("triton_kernels") is not None
 
 
 def should_keep_output() -> bool:
@@ -610,6 +613,8 @@ class TestTritonparseCUDA(unittest.TestCase):
                 print("✓ Cleaned up temporary directory")
             tritonparse.structured_logging.clear_logging_config()
 
+    @unittest.skipUnless(torch.cuda.is_available(), "CUDA not available")
+    @unittest.skipUnless(HAS_TRITON_KERNELS, "triton_kernels not installed")
     def test_triton_kernels_Tensor(self):
         from triton_kernels.topk_details._topk_forward import _topk_forward
         from tritonparse.reproducer import utils as reproducer_utils
