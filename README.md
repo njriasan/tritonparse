@@ -3,7 +3,7 @@
 [![License: BSD-3](https://img.shields.io/badge/License-BSD--3-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
 [![GitHub Pages](https://img.shields.io/badge/GitHub%20Pages-Deploy-brightgreen)](https://meta-pytorch.org/tritonparse/)
 
-**A comprehensive visualization and analysis tool for Triton IR files** — helping developers analyze, debug, and understand Triton kernel compilation processes.
+**A comprehensive visualization and analysis tool for Triton kernel compilation and launch** — helping developers analyze, debug, and understand Triton kernel compilation processes.
 
 🌐 **[Try it online →](https://meta-pytorch.org/tritonparse/?json_url=https://meta-pytorch.org/tritonparse/dedicated_log_triton_trace_findhao__mapped.ndjson.gz)**
 
@@ -63,10 +63,18 @@ INFO:tritonparse:Copying parsed logs from /tmp/tmp1gan7zky to /scratch/findhao/t
 ## 🛠️ Installation
 
 **For basic usage (trace generation):**
+Four options:
 ```bash
+# install nightly version
+pip install -U --pre tritonparse
+# install stable version
+pip install tritonparse
+# install from source
 git clone https://github.com/meta-pytorch/tritonparse.git
 cd tritonparse
 pip install -e .
+# pip install the latest version from github
+pip install git+https://github.com/meta-pytorch/tritonparse.git
 ```
 
 **Prerequisites:** Python ≥ 3.10, Triton ≥ 3.4.0, GPU required (NVIDIA/AMD)
