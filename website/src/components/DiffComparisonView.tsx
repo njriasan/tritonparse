@@ -84,10 +84,34 @@ const DiffComparisonView: React.FC<DiffComparisonViewProps> = ({
 
   // Vertical resizable container: keep width 100%, allow drag to change height
   const initialPxHeight = useMemo(() => {
-    if (typeof height === 'string' && /\d+px$/.test(height)) {
-      try { return parseInt(height, 10); } catch { return 600; }
+    // If a pixel value is provided, use it directly
+    if (typeof height === 'string') {
+      const pxMatch = height.match(/(\d+)px$/);
+      if (pxMatch) {
+        try { return parseInt(pxMatch[1], 10); } catch { /* ignore */ }
+      }
+
+      // Support calc(100vh - Xrem)
+      const calcRemMatch = height.match(/calc\(100vh\s*-\s*(\d+(?:\.\d+)?)rem\)/i);
+      if (calcRemMatch && typeof window !== 'undefined') {
+        const rem = parseFloat(calcRemMatch[1]);
+        const remPx = rem * 16; // assume 1rem = 16px baseline
+        return Math.max(240, Math.round(window.innerHeight - remPx));
+      }
+
+      // Support plain vh values (e.g., 80vh)
+      const vhMatch = height.match(/(\d+(?:\.\d+)?)vh/i);
+      if (vhMatch && typeof window !== 'undefined') {
+        const vh = parseFloat(vhMatch[1]);
+        return Math.max(240, Math.round(window.innerHeight * (vh / 100)));
+      }
     }
-    return 600; // sensible default
+
+    // Fallback: viewport height minus 16rem (~256px) if available; otherwise 600px
+    if (typeof window !== 'undefined') {
+      return Math.max(240, window.innerHeight - 256);
+    }
+    return 600;
   }, [height]);
 
   const [containerHeight, setContainerHeight] = useState<number>(initialPxHeight);

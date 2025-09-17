@@ -199,6 +199,7 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
         <DiffComparisonView
           leftContent={leftContent}
           rightContent={rightContent}
+          height="calc(100vh - 14rem)"
           language={irType === "python" ? "python" : "plaintext"}
           options={{
             ignoreWhitespace: ignoreWs,
@@ -241,6 +242,7 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
                   <DiffComparisonView
                     leftContent={leftContent}
                     rightContent={rightContent}
+                    height="calc(100vh - 14rem)"
                     language={t === "python" ? "python" : "plaintext"}
                     options={{
                       ignoreWhitespace: ignoreWs,
@@ -295,10 +297,10 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
 
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-bold text-gray-800 mb-4">File Diff</h1>
+      <h1 className="text-2xl font-bold text-gray-800 mb-3">File Diff</h1>
 
-      <div className="bg-white rounded-lg p-4 mb-4 shadow border border-gray-200">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="bg-white rounded-lg p-3 mb-3 shadow border border-gray-200">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
             <div className="text-sm text-gray-500 mb-1">Left Source (json_url)</div>
             <div className="text-gray-800 break-all mb-2">{leftLoadedUrl || "(from local file or default)"}</div>
@@ -367,7 +369,7 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Mode</label>
             <div className="flex items-center gap-2">
