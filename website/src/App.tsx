@@ -10,18 +10,21 @@ import {
 import { checkFbDirectoryExists } from "./utils/fbDetection";
 import CodeView from "./pages/CodeView";
 import FileDiffView from "./pages/FileDiffView";
+import { FileDiffSessionProvider } from "./context/FileDiffSession";
 import SingleCodeViewer from "./components/SingleCodeViewer";
 import KernelOverview from "./pages/KernelOverview";
 import DataSourceSelector from "./components/DataSourceSelector";
 import WelcomeScreen from "./components/WelcomeScreen";
 import ExternalLink from "./components/ExternalLink";
 import { mapLanguageToHighlighter } from "./components/CodeViewer";
+import { useFileDiffSession } from "./context/FileDiffSession";
 
 /**
  * Main application component that handles data loading,
  * state management, and rendering different views.
  */
 function App() {
+  const sess = useFileDiffSession();
   // Store processed kernel data from log file
   const [kernels, setKernels] = useState<ProcessedKernel[]>([]);
   // Track loading state for displaying loading indicator
@@ -89,6 +92,17 @@ function App() {
       }
     });
   }, []); // Empty dependency array means this runs once on mount
+
+  // Register app controls for FileDiff session navigation
+  useEffect(() => {
+    sess.registerAppControls({
+      setKernels,
+      setLoadedUrl,
+      setActiveTab,
+      setSelectedKernel,
+      setDataLoaded,
+    });
+  }, [sess, setKernels, setLoadedUrl, setActiveTab, setSelectedKernel, setDataLoaded]);
 
   /**
    * Generic data loading function that handles both URLs and local files
@@ -398,13 +412,16 @@ function App() {
               <h1
                 className="text-gray-800 text-2xl font-bold cursor-pointer hover:text-indigo-600 transition-colors"
                 onClick={() => {
-                  // Reset app state to show welcome page
-                  if (dataLoaded) {
-                    setDataLoaded(false);
-                    setSelectedIR(null);
-                    setSelectedKernel(-1);
-                    setError(null);
-                  }
+                  // Reset app state to show welcome page regardless of dataLoaded
+                  setDataLoaded(false);
+                  setSelectedIR(null);
+                  setSelectedKernel(-1);
+                  setError(null);
+                  setActiveTab("overview");
+                  setLoadedUrl(null);
+                  const newUrl = new URL(window.location.href);
+                  newUrl.searchParams.delete("view");
+                  window.history.replaceState({}, "", newUrl.toString());
                 }}
                 title="Back to home"
               >
@@ -619,4 +636,10 @@ function App() {
   );
 }
 
-export default App;
+export default function AppWithProviders() {
+  return (
+    <FileDiffSessionProvider>
+      <App />
+    </FileDiffSessionProvider>
+  );
+}

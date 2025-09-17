@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import DiffComparisonView from "../components/DiffComparisonView";
+import { useFileDiffSession } from "../context/FileDiffSession";
 import { ProcessedKernel, loadLogData, loadLogDataFromFile, processKernelData, getIRType } from "../utils/dataLoader";
 
 type DiffMode = "single" | "all";
@@ -49,6 +50,7 @@ function getContentByIRType(kernel: ProcessedKernel | undefined, irType: string)
 }
 
 const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIndex, leftLoadedUrl }) => {
+  const sess = useFileDiffSession();
   // Left source state (URL/local) – overrides props when present
   const [leftKernelsFromUrl, setLeftKernelsFromUrl] = useState<ProcessedKernel[]>([]);
   const [leftKernelsFromLocal, setLeftKernelsFromLocal] = useState<ProcessedKernel[]>([]);
@@ -88,6 +90,9 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
     const aUrl = params.get("json_url");
     if (aUrl) {
       setLeftLoadedUrlLocal(aUrl);
+    } else if (leftLoadedUrl) {
+      // Prop from App: treat as initial left URL
+      setLeftLoadedUrlLocal(leftLoadedUrl);
     }
 
     // Mode and IR
@@ -127,6 +132,7 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
         const processed = processKernelData(entries);
         setLeftKernelsFromUrl(processed);
         setLeftLoadedFromLocal(false);
+        sess.setLeftFromUrl(url, processed);
         const leftHash = (window as any).__TRITONPARSE_leftHash as string | undefined;
         if (leftHash) {
           const li = findKernelIndexByHash(leftHash, processed);
@@ -150,6 +156,7 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
         const entries = await loadLogData(url);
         const processed = processKernelData(entries);
         setKernelsRight(processed);
+        sess.setRightFromUrl(url, processed);
         // set right index by hash if present
         const rightHash = (window as any).__TRITONPARSE_rightHash as string | undefined;
         if (rightHash) {
@@ -328,6 +335,7 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
       setKernelsRight(processed);
       setRightLoadedFromLocal(true);
       setRightLoadedUrl(null); // do not persist json_b_url when loaded from local file
+      sess.setRightFromLocal(processed);
       // select the first kernel or restore by hash if available
       const rightHash = (window as any).__TRITONPARSE_rightHash as string | undefined;
       if (rightHash) {
@@ -356,6 +364,7 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
       setLeftKernelsFromLocal(processed);
       setLeftLoadedFromLocal(true);
       setLeftLoadedUrlLocal(null);
+      sess.setLeftFromLocal(processed);
       const leftHash = (window as any).__TRITONPARSE_leftHash as string | undefined;
       if (leftHash) {
         const li = findKernelIndexByHash(leftHash, processed);
@@ -403,6 +412,22 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
             {leftLoadedFromLocal && (
               <div className="text-gray-600 text-sm mb-2">(loaded from local file)</div>
             )}
+            <div className="flex gap-2 mt-1">
+              <button
+                className="px-2 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded border"
+                disabled={leftArrayResolved.length === 0}
+                onClick={() => sess.gotoOverview('left')}
+              >
+                Left → Kernel Overview
+              </button>
+              <button
+                className="px-2 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded border"
+                disabled={leftArrayResolved.length === 0}
+                onClick={() => sess.gotoIRCode('left')}
+              >
+                Left → IR Code
+              </button>
+            </div>
           </div>
           <div>
             <div className="text-sm text-gray-500 mb-1">Right Source (json_b_url)</div>
@@ -441,6 +466,22 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
               <div className="text-red-600 text-sm mb-2">{errorRight}</div>
             )}
             {/* Right kernel select moved to aligned row below */}
+            <div className="flex gap-2 mt-1">
+              <button
+                className="px-2 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded border"
+                disabled={kernelsRight.length === 0}
+                onClick={() => sess.gotoOverview('right')}
+              >
+                Right → Kernel Overview
+              </button>
+              <button
+                className="px-2 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded border"
+                disabled={kernelsRight.length === 0}
+                onClick={() => sess.gotoIRCode('right')}
+              >
+                Right → IR Code
+              </button>
+            </div>
           </div>
         </div>
 
@@ -451,7 +492,7 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
             <select
               className="border border-gray-300 rounded px-3 py-2 bg-white w-full"
               value={leftIdx}
-              onChange={(e) => setLeftIdx(parseInt(e.target.value))}
+              onChange={(e) => { const v = parseInt(e.target.value); setLeftIdx(v); try { sess.setLeftIdx(v); } catch {} }}
               disabled={leftArrayResolved.length === 0}
             >
               {leftArrayResolved.map((k, i) => (
@@ -466,7 +507,7 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
             <select
               className="border border-gray-300 rounded px-3 py-2 bg-white w-full"
               value={rightIdx}
-              onChange={(e) => setRightIdx(parseInt(e.target.value))}
+              onChange={(e) => { const v = parseInt(e.target.value); setRightIdx(v); try { sess.setRightIdx(v); } catch {} }}
               disabled={kernelsRight.length === 0}
             >
               {kernelsRight.map((k, i) => (
