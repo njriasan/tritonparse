@@ -329,7 +329,17 @@ function App() {
         />
       );
     } else if (!dataLoaded) {
-      // Show welcome screen if no data is loaded
+      // If in File Diff tab, render it even with no data
+      if (activeTab === "file_diff") {
+        return (
+          <FileDiffView
+            kernelsLeft={kernels}
+            selectedLeftIndex={Math.max(0, selectedKernel)}
+            leftLoadedUrl={loadedUrl}
+          />
+        );
+      }
+      // Show welcome screen if no data is loaded and not in File Diff
       return (
         <WelcomeScreen
           loadDefaultData={loadDefaultData}
@@ -448,9 +458,10 @@ function App() {
               isLoading={loading}
             />
 
-            {/* Tab navigation (only show when data is loaded and not in IR view) */}
-            {dataLoaded && kernels.length > 0 && !selectedIR && (
+            {/* Tab navigation: show all tabs only when data loaded; otherwise only File Diff */}
+            {!selectedIR && (
               <div className="flex space-x-4">
+                {dataLoaded && kernels.length > 0 && (
                 <button
                   className={`px-3 py-2 text-sm font-medium rounded-md ${activeTab === "overview" ? "bg-blue-700 text-white shadow-md" : "bg-blue-100 text-blue-700 hover:bg-blue-200"
                     }`}
@@ -468,32 +479,33 @@ function App() {
                 >
                   Kernel Overview
                 </button>
-                <button
-                  className={`px-3 py-2 text-sm font-medium rounded-md ${activeTab === "comparison" ? "bg-blue-700 text-white shadow-md" : "bg-blue-100 text-blue-700 hover:bg-blue-200"
-                    }`}
-                  onClick={() => {
-                    setActiveTab("comparison");
+                )}
+                {dataLoaded && kernels.length > 0 && (
+                  <button
+                    className={`px-3 py-2 text-sm font-medium rounded-md ${activeTab === "comparison" ? "bg-blue-700 text-white shadow-md" : "bg-blue-100 text-blue-700 hover:bg-blue-200"
+                      }`}
+                    onClick={() => {
+                      setActiveTab("comparison");
 
-                    // Update URL parameters when switching to comparison view
-                    if (loadedUrl) {
-                      const newUrl = new URL(window.location.href);
-                      // Add view parameter
-                      newUrl.searchParams.set("view", "ir_code_comparison");
-                      window.history.replaceState({}, "", newUrl.toString());
-                    }
-                  }}
-                >
-                  IR Code
-                </button>
+                      // Update URL parameters when switching to comparison view
+                      if (loadedUrl) {
+                        const newUrl = new URL(window.location.href);
+                        // Add view parameter
+                        newUrl.searchParams.set("view", "ir_code_comparison");
+                        window.history.replaceState({}, "", newUrl.toString());
+                      }
+                    }}
+                  >
+                    IR Code
+                  </button>
+                )}
                 <button
                   className={`px-3 py-2 text-sm font-medium rounded-md ${activeTab === "file_diff" ? "bg-blue-700 text-white shadow-md" : "bg-blue-100 text-blue-700 hover:bg-blue-200"}`}
                   onClick={() => {
                     setActiveTab("file_diff");
-                    if (loadedUrl) {
-                      const newUrl = new URL(window.location.href);
-                      newUrl.searchParams.set("view", "file_diff");
-                      window.history.replaceState({}, "", newUrl.toString());
-                    }
+                    const newUrl = new URL(window.location.href);
+                    newUrl.searchParams.set("view", "file_diff");
+                    window.history.replaceState({}, "", newUrl.toString());
                   }}
                 >
                   File Diff

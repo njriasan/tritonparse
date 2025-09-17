@@ -49,6 +49,12 @@ function getContentByIRType(kernel: ProcessedKernel | undefined, irType: string)
 }
 
 const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIndex, leftLoadedUrl }) => {
+  // Left source state (URL/local) – overrides props when present
+  const [leftKernelsFromUrl, setLeftKernelsFromUrl] = useState<ProcessedKernel[]>([]);
+  const [leftKernelsFromLocal, setLeftKernelsFromLocal] = useState<ProcessedKernel[]>([]);
+  const [leftLoadedUrlLocal, setLeftLoadedUrlLocal] = useState<string | null>(null);
+  const [leftLoadedFromLocal, setLeftLoadedFromLocal] = useState<boolean>(false);
+
   // Right source state
   const [kernelsRight, setKernelsRight] = useState<ProcessedKernel[]>([]);
   const [rightLoadedUrl, setRightLoadedUrl] = useState<string | null>(null);
@@ -78,6 +84,12 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
       setRightLoadedUrl(bUrl);
     }
 
+    // Left URL – use json_url only (no json_a_url)
+    const aUrl = params.get("json_url");
+    if (aUrl) {
+      setLeftLoadedUrlLocal(aUrl);
+    }
+
     // Mode and IR
     const modeParam = (params.get(PARAM_MODE) as DiffMode) || undefined;
     if (modeParam === "single" || modeParam === "all") setMode(modeParam);
@@ -96,6 +108,7 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
     // Left/Right kernel index by hash
     const leftHash = params.get(PARAM_KERNEL_HASH_A);
     const rightHash = params.get(PARAM_KERNEL_HASH_B);
+    if (leftHash) (window as any).__TRITONPARSE_leftHash = leftHash;
     const li = findKernelIndexByHash(leftHash, kernelsLeft);
     if (li >= 0) setLeftIdx(li);
 
@@ -105,6 +118,28 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
       (window as any).__TRITONPARSE_rightHash = rightHash;
     }
   }, [kernelsLeft]);
+
+  // Load left URL when set (internal to FileDiffView)
+  useEffect(() => {
+    async function loadLeft(url: string) {
+      try {
+        const entries = await loadLogData(url);
+        const processed = processKernelData(entries);
+        setLeftKernelsFromUrl(processed);
+        setLeftLoadedFromLocal(false);
+        const leftHash = (window as any).__TRITONPARSE_leftHash as string | undefined;
+        if (leftHash) {
+          const li = findKernelIndexByHash(leftHash, processed);
+          if (li >= 0) setLeftIdx(li);
+        }
+      } catch (e) {
+        // ignore errors here; show via UI if needed later
+      }
+    }
+    if (leftLoadedUrlLocal) {
+      loadLeft(leftLoadedUrlLocal);
+    }
+  }, [leftLoadedUrlLocal]);
 
   // Load right URL when set
   useEffect(() => {
@@ -134,14 +169,17 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
 
   // Compute union ir types and choose default ir if needed
   const unionIrTypes = useMemo(() => {
-    const left = kernelsLeft[leftIdx];
+    const leftArray = leftLoadedFromLocal
+      ? leftKernelsFromLocal
+      : (leftLoadedUrlLocal ? leftKernelsFromUrl : kernelsLeft);
+    const left = leftArray[leftIdx];
     const right = kernelsRight[rightIdx];
     const set = new Set<string>();
     listIRTypesForKernel(left).forEach(t => set.add(t));
     listIRTypesForKernel(right).forEach(t => set.add(t));
     if (set.size === 0) return ["python"] as string[];
     return Array.from(set);
-  }, [kernelsLeft, kernelsRight, leftIdx, rightIdx]);
+  }, [kernelsLeft, kernelsRight, leftIdx, rightIdx, leftLoadedFromLocal, leftKernelsFromLocal, leftLoadedUrlLocal, leftKernelsFromUrl]);
 
   useEffect(() => {
     if (!irType && unionIrTypes.length > 0) setIrType(unionIrTypes[0]);
@@ -152,13 +190,20 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
     const params = new URLSearchParams(window.location.search);
     params.set(PARAM_VIEW, "file_diff");
     // left always present
-    if (kernelsLeft[leftIdx]?.metadata?.hash) params.set(PARAM_KERNEL_HASH_A, String(kernelsLeft[leftIdx].metadata!.hash));
+    const leftArray = leftLoadedFromLocal
+      ? leftKernelsFromLocal
+      : (leftLoadedUrlLocal ? leftKernelsFromUrl : kernelsLeft);
+    if (leftArray[leftIdx]?.metadata?.hash) params.set(PARAM_KERNEL_HASH_A, String(leftArray[leftIdx].metadata!.hash));
     else params.delete(PARAM_KERNEL_HASH_A);
     // right url/hash
     if (rightLoadedUrl) params.set(PARAM_JSON_B_URL, rightLoadedUrl);
     else params.delete(PARAM_JSON_B_URL);
     if (kernelsRight[rightIdx]?.metadata?.hash) params.set(PARAM_KERNEL_HASH_B, String(kernelsRight[rightIdx].metadata!.hash));
     else params.delete(PARAM_KERNEL_HASH_B);
+    // left url
+    if (leftLoadedFromLocal) params.delete("json_url");
+    else if (leftLoadedUrlLocal) params.set("json_url", leftLoadedUrlLocal);
+    else if (leftLoadedUrl) params.set("json_url", leftLoadedUrl); else params.delete("json_url");
     // mode/ir
     params.set(PARAM_MODE, mode);
     if (mode === "single" && irType) params.set(PARAM_IR, irType);
@@ -172,14 +217,17 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
     const newUrl = new URL(window.location.href);
     newUrl.search = params.toString();
     window.history.replaceState({}, "", newUrl.toString());
-  }, [kernelsLeft, kernelsRight, leftIdx, rightIdx, rightLoadedUrl, mode, irType, ignoreWs, wordLevel, contextLines, wordWrap, onlyChanged]);
+  }, [kernelsLeft, kernelsRight, leftIdx, rightIdx, rightLoadedUrl, mode, irType, ignoreWs, wordLevel, contextLines, wordWrap, onlyChanged, leftLoadedFromLocal, leftLoadedUrlLocal, leftLoadedUrl, leftKernelsFromLocal, leftKernelsFromUrl]);
 
   useEffect(() => {
     syncUrl();
   }, [syncUrl]);
 
   // UI builders
-  const leftKernel = kernelsLeft[leftIdx];
+  const leftArrayResolved = leftLoadedFromLocal
+    ? leftKernelsFromLocal
+    : (leftLoadedUrlLocal ? leftKernelsFromUrl : kernelsLeft);
+  const leftKernel = leftArrayResolved[leftIdx];
   const rightKernel = kernelsRight[rightIdx];
 
   const renderSingle = () => {
@@ -261,7 +309,7 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
     );
   };
 
-  // Right source loader
+  // Left and Right source loaders
   const [pendingUrl, setPendingUrl] = useState<string>("");
   const [rightLoadedFromLocal, setRightLoadedFromLocal] = useState<boolean>(false);
   const handleLoadRight = async () => {
@@ -294,6 +342,29 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
       setLoadingRight(false);
     }
   };
+  const [leftPendingUrlLocal, setLeftPendingUrlLocal] = useState<string>("");
+  const handleLoadLeft = async () => {
+    if (!leftPendingUrlLocal) return;
+    setLeftLoadedFromLocal(false);
+    setLeftLoadedUrlLocal(leftPendingUrlLocal);
+  };
+  const handleLoadLeftLocal = async (file: File | null) => {
+    if (!file) return;
+    try {
+      const entries = await loadLogDataFromFile(file);
+      const processed = processKernelData(entries);
+      setLeftKernelsFromLocal(processed);
+      setLeftLoadedFromLocal(true);
+      setLeftLoadedUrlLocal(null);
+      const leftHash = (window as any).__TRITONPARSE_leftHash as string | undefined;
+      if (leftHash) {
+        const li = findKernelIndexByHash(leftHash, processed);
+        setLeftIdx(li >= 0 ? li : 0);
+      } else {
+        setLeftIdx(0);
+      }
+    } catch {}
+  };
 
   return (
     <div className="p-6">
@@ -303,19 +374,35 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
             <div className="text-sm text-gray-500 mb-1">Left Source (json_url)</div>
-            <div className="text-gray-800 break-all mb-2">{leftLoadedUrl || "(from local file or default)"}</div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Left Kernel</label>
-            <select
-              className="border border-gray-300 rounded px-3 py-2 bg-white w-full"
-              value={leftIdx}
-              onChange={(e) => setLeftIdx(parseInt(e.target.value))}
-            >
-              {kernelsLeft.map((k, i) => (
-                <option key={`l-${i}`} value={i}>
-                  {k.name} {(k.metadata?.hash || "").slice(0, 8)}
-                </option>
-              ))}
-            </select>
+            <div className="flex items-center gap-2 mb-2">
+              <input
+                type="url"
+                placeholder="https://.../trace.ndjson.gz"
+                className="flex-1 border border-gray-300 rounded px-3 py-2"
+                value={leftPendingUrlLocal}
+                onChange={(e) => setLeftPendingUrlLocal(e.target.value)}
+              />
+              <button
+                className="px-3 py-2 bg-blue-600 text-white rounded"
+                onClick={handleLoadLeft}
+              >
+                Load
+              </button>
+            </div>
+            <div className="flex items-center gap-2 mb-2">
+              <input
+                type="file"
+                accept=".ndjson,.ndjson.gz,.gz,.jsonl"
+                className="block w-full text-sm text-gray-700"
+                onChange={(e) => handleLoadLeftLocal(e.target.files?.[0] || null)}
+              />
+            </div>
+            {(leftLoadedUrlLocal || leftLoadedUrl) && (
+              <div className="text-gray-800 break-all mb-2">{leftLoadedUrlLocal || leftLoadedUrl}</div>
+            )}
+            {leftLoadedFromLocal && (
+              <div className="text-gray-600 text-sm mb-2">(loaded from local file)</div>
+            )}
           </div>
           <div>
             <div className="text-sm text-gray-500 mb-1">Right Source (json_b_url)</div>
@@ -353,6 +440,28 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
             {errorRight && (
               <div className="text-red-600 text-sm mb-2">{errorRight}</div>
             )}
+            {/* Right kernel select moved to aligned row below */}
+          </div>
+        </div>
+
+        {/* Aligned kernel selectors row */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Left Kernel</label>
+            <select
+              className="border border-gray-300 rounded px-3 py-2 bg-white w-full"
+              value={leftIdx}
+              onChange={(e) => setLeftIdx(parseInt(e.target.value))}
+              disabled={leftArrayResolved.length === 0}
+            >
+              {leftArrayResolved.map((k, i) => (
+                <option key={`l-${i}`} value={i}>
+                  {k.name} {(k.metadata?.hash || "").slice(0, 8)}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Right Kernel</label>
             <select
               className="border border-gray-300 rounded px-3 py-2 bg-white w-full"
