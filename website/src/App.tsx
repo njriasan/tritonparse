@@ -509,12 +509,12 @@ function App() {
         {/* Show error message if data loading failed */}
         {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-6">{error}</div>}
 
-        {/* Show loaded URL if available */}
-        {loadedUrl && dataLoaded && (
+        {/* Show share bar whenever data is loaded (even if left source is local) */}
+        {dataLoaded && (
           <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded mb-6 flex items-center justify-between">
             <div>
               <span className="font-medium">Loaded from: </span>
-              <span className="break-all">{loadedUrl}</span>
+              <span className="break-all">{loadedUrl || "(local file)"}</span>
             </div>
             <button
               onClick={() => {

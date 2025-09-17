@@ -38,6 +38,8 @@ const DiffComparisonView: React.FC<DiffComparisonViewProps> = ({
       renderOverviewRuler: true,
       renderIndicators: true,
       wordWrap: options?.wordWrap ?? "on",
+      wordWrapMinified: true,
+      wrappingStrategy: "advanced",
       ignoreTrimWhitespace: options?.ignoreWhitespace ?? true,
       // @ts-ignore - monaco types may vary by version; it's safe to pass through
       hideUnchangedRegions: hideUnchanged,
@@ -66,8 +68,9 @@ const DiffComparisonView: React.FC<DiffComparisonViewProps> = ({
       const wrap = options?.wordWrap ?? "on";
       const original = editor.getOriginalEditor?.();
       const modified = editor.getModifiedEditor?.();
-      original?.updateOptions?.({ wordWrap: wrap, scrollbar: { horizontal: 'hidden', horizontalScrollbarSize: 0 } });
-      modified?.updateOptions?.({ wordWrap: wrap, scrollbar: { horizontal: 'hidden', horizontalScrollbarSize: 0 } });
+      const shared = { wordWrap: wrap, wordWrapMinified: true, wrappingStrategy: 'advanced', scrollbar: { horizontal: 'hidden', horizontalScrollbarSize: 0 } } as any;
+      original?.updateOptions?.(shared);
+      modified?.updateOptions?.(shared);
     } catch {}
   }, [options?.wordWrap]);
 
@@ -86,8 +89,9 @@ const DiffComparisonView: React.FC<DiffComparisonViewProps> = ({
             const wrap = options?.wordWrap ?? "on";
             const original = editor.getOriginalEditor?.();
             const modified = editor.getModifiedEditor?.();
-            original?.updateOptions?.({ wordWrap: wrap, scrollbar: { horizontal: 'hidden', horizontalScrollbarSize: 0 } });
-            modified?.updateOptions?.({ wordWrap: wrap, scrollbar: { horizontal: 'hidden', horizontalScrollbarSize: 0 } });
+            const shared = { wordWrap: wrap, wordWrapMinified: true, wrappingStrategy: 'advanced', scrollbar: { horizontal: 'hidden', horizontalScrollbarSize: 0 } } as any;
+            original?.updateOptions?.(shared);
+            modified?.updateOptions?.(shared);
             editorRef.current = editor;
           } catch {}
         }}
