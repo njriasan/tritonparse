@@ -90,6 +90,7 @@ const KernelOverview: React.FC<KernelOverviewProps> = ({
   onViewIR,
 }) => {
   // State for controlling the sticky and collapsed behavior of the kernel selector
+  const [isTiledKernelView, setIsTiledKernelView] = useState(false);
   const [isSticky, setIsSticky] = useState(true);
   const [isCollapsed, setIsCollapsed] = useState(true);
   const buttonsContainerRef = useRef<HTMLDivElement>(null);
@@ -99,7 +100,7 @@ const KernelOverview: React.FC<KernelOverviewProps> = ({
    * the selected kernel's row is visible when the header is sticky and collapsed.
    */
   const adjustScroll = useCallback(() => {
-    if (isSticky && isCollapsed && buttonsContainerRef.current) {
+    if (isTiledKernelView && isSticky && isCollapsed && buttonsContainerRef.current) {
       const container = buttonsContainerRef.current;
       const selectedButton = container.children[selectedKernel] as
         | HTMLElement
@@ -110,7 +111,7 @@ const KernelOverview: React.FC<KernelOverviewProps> = ({
         container.scrollTop = selectedButton.offsetTop;
       }
     }
-  }, [isSticky, isCollapsed, selectedKernel]);
+  }, [isTiledKernelView, isSticky, isCollapsed, selectedKernel]);
 
   // Effect to adjust scroll on state changes and listen for window resizing
   useLayoutEffect(() => {
@@ -154,45 +155,77 @@ const KernelOverview: React.FC<KernelOverviewProps> = ({
           >
             Available Kernels
           </h2>
-          <div className="flex items-center gap-2">
-            <span
-              className={`${
-                isSticky ? "text-xs" : "text-sm"
-              } text-gray-600`}
-            >
-              Sticky Header
-            </span>
-            <ToggleSwitch isChecked={isSticky} onChange={setIsSticky} />
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <span
+                className={`${
+                  isSticky ? "text-xs" : "text-sm"
+                } text-gray-600`}
+              >
+                Tiled View
+              </span>
+              <ToggleSwitch isChecked={isTiledKernelView} onChange={setIsTiledKernelView} />
+            </div>
+            <div className="flex items-center gap-2">
+              <span
+                className={`${
+                  isSticky ? "text-xs" : "text-sm"
+                } text-gray-600`}
+              >
+                Sticky Header
+              </span>
+              <ToggleSwitch isChecked={isSticky} onChange={setIsSticky} />
+            </div>
+            {!isTiledKernelView && (
+              <div className="flex items-center gap-2">
+                <span className={`${isSticky ? "text-xs" : "text-sm"} text-gray-600`}>
+                  Select Kernel
+                </span>
+                <select
+                  className="border border-gray-300 rounded-md p-1.5 text-sm bg-white"
+                  value={selectedKernel}
+                  onChange={(e) => onSelectKernel(Number(e.target.value))}
+                >
+                  {kernels.map((k, index) => (
+                    <option key={index} value={index}>
+                      {k.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
         </div>
-        <div
-          ref={buttonsContainerRef}
-          className={`flex flex-wrap transition-all duration-300 ${
-            isSticky ? "gap-1" : "gap-2"
-          } ${
-            isSticky && isCollapsed
-              ? "max-h-9 overflow-hidden"
-              : "max-h-96"
-          }`}
-        >
-          {kernels.map((k, index) => (
-            <button
-              key={index}
-              className={`rounded-md transition-colors whitespace-nowrap ${
-                isSticky
-                  ? "px-3 py-1 text-xs"
-                  : "px-4 py-2 text-sm"
-              } ${
-                index === selectedKernel
-                  ? "bg-blue-100 border border-blue-300 text-blue-800"
-                  : "bg-gray-50 border border-gray-200 hover:bg-blue-50 text-gray-800"
-              }`}
-              onClick={() => onSelectKernel(index)}
-            >
-              <div className="font-medium">{k.name}</div>
-            </button>
-          ))}
-        </div>
+        {isTiledKernelView && (
+          <div
+            ref={buttonsContainerRef}
+            className={`flex flex-wrap transition-all duration-300 ${
+              isSticky ? "gap-1" : "gap-2"
+            } ${
+              isSticky && isCollapsed
+                ? "max-h-9 overflow-hidden"
+                : "max-h-96"
+            }`}
+          >
+            {kernels.map((k, index) => (
+              <button
+                key={index}
+                className={`rounded-md transition-colors whitespace-nowrap ${
+                  isSticky
+                    ? "px-3 py-1 text-xs"
+                    : "px-4 py-2 text-sm"
+                } ${
+                  index === selectedKernel
+                    ? "bg-blue-100 border border-blue-300 text-blue-800"
+                    : "bg-gray-50 border border-gray-200 hover:bg-blue-50 text-gray-800"
+                }`}
+                onClick={() => onSelectKernel(index)}
+              >
+                <div className="font-medium">{k.name}</div>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Kernel Details */}
