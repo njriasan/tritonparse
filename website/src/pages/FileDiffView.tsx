@@ -277,8 +277,8 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
       const processed = processKernelData(entries);
       setKernelsRight(processed);
       setRightLoadedFromLocal(true);
-      setRightLoadedUrl(null); // 不写 json_b_url 到 URL
-      // 选择第一项或按照 hash 恢复
+      setRightLoadedUrl(null); // do not persist json_b_url when loaded from local file
+      // select the first kernel or restore by hash if available
       const rightHash = (window as any).__TRITONPARSE_rightHash as string | undefined;
       if (rightHash) {
         const ri = findKernelIndexByHash(rightHash, processed);
