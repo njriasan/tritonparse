@@ -1,0 +1,430 @@
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import DiffComparisonView from "../components/DiffComparisonView";
+import { ProcessedKernel, loadLogData, loadLogDataFromFile, processKernelData, getIRType } from "../utils/dataLoader";
+
+type DiffMode = "single" | "all";
+
+interface FileDiffViewProps {
+  kernelsLeft: ProcessedKernel[];
+  selectedLeftIndex: number;
+  leftLoadedUrl: string | null;
+}
+
+const PARAM_VIEW = "view";
+const PARAM_JSON_B_URL = "json_b_url";
+const PARAM_KERNEL_HASH_A = "kernel_hash_a";
+const PARAM_KERNEL_HASH_B = "kernel_hash_b";
+const PARAM_MODE = "mode";
+const PARAM_IR = "ir";
+const PARAM_IGNORE_WS = "ignore_ws";
+const PARAM_WORD_LEVEL = "word_level";
+const PARAM_CONTEXT = "context";
+const PARAM_WRAP = "wrap";
+const PARAM_ONLY_CHANGED = "only_changed";
+
+function findKernelIndexByHash(hash: string | null, kernels: ProcessedKernel[]): number {
+  if (!hash) return -1;
+  const idx = kernels.findIndex(k => k.metadata?.hash === hash);
+  return idx >= 0 ? idx : -1;
+}
+
+function listIRTypesForKernel(kernel: ProcessedKernel | undefined): Set<string> {
+  const s = new Set<string>();
+  if (!kernel) return s;
+  for (const key of Object.keys(kernel.irFiles || {})) {
+    s.add(getIRType(key));
+  }
+  if (kernel.pythonSourceInfo?.code) s.add("python");
+  return s;
+}
+
+function getContentByIRType(kernel: ProcessedKernel | undefined, irType: string): string {
+  if (!kernel) return "";
+  if (irType === "python") {
+    return kernel.pythonSourceInfo?.code || "";
+  }
+  const keys = Object.keys(kernel.irFiles || {});
+  const found = keys.find(k => getIRType(k) === irType);
+  return found ? kernel.irFiles[found] : "";
+}
+
+const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIndex, leftLoadedUrl }) => {
+  // Right source state
+  const [kernelsRight, setKernelsRight] = useState<ProcessedKernel[]>([]);
+  const [rightLoadedUrl, setRightLoadedUrl] = useState<string | null>(null);
+  const [loadingRight, setLoadingRight] = useState<boolean>(false);
+  const [errorRight, setErrorRight] = useState<string | null>(null);
+
+  // Selection state
+  const [leftIdx, setLeftIdx] = useState<number>(Math.max(0, selectedLeftIndex));
+  const [rightIdx, setRightIdx] = useState<number>(0);
+  const [mode, setMode] = useState<DiffMode>("single");
+  const [irType, setIrType] = useState<string>("ttgir");
+
+  // Diff options
+  const [ignoreWs, setIgnoreWs] = useState<boolean>(true);
+  const [wordLevel, setWordLevel] = useState<boolean>(true);
+  const [contextLines, setContextLines] = useState<number>(3);
+  const [wordWrap, setWordWrap] = useState<"off" | "on">("on");
+  const [onlyChanged, setOnlyChanged] = useState<boolean>(false);
+
+  // Read URL on mount
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+
+    // Right URL
+    const bUrl = params.get(PARAM_JSON_B_URL);
+    if (bUrl) {
+      setRightLoadedUrl(bUrl);
+    }
+
+    // Mode and IR
+    const modeParam = (params.get(PARAM_MODE) as DiffMode) || undefined;
+    if (modeParam === "single" || modeParam === "all") setMode(modeParam);
+    const irParam = params.get(PARAM_IR);
+    if (irParam) setIrType(irParam);
+
+    // Options
+    setIgnoreWs(params.get(PARAM_IGNORE_WS) === "0" ? false : true);
+    setWordLevel(params.get(PARAM_WORD_LEVEL) === "1");
+    const ctx = parseInt(params.get(PARAM_CONTEXT) || "");
+    if (!Number.isNaN(ctx)) setContextLines(ctx);
+    const wrap = params.get(PARAM_WRAP);
+    if (wrap === "on" || wrap === "off") setWordWrap(wrap);
+    setOnlyChanged(params.get(PARAM_ONLY_CHANGED) === "1");
+
+    // Left/Right kernel index by hash
+    const leftHash = params.get(PARAM_KERNEL_HASH_A);
+    const rightHash = params.get(PARAM_KERNEL_HASH_B);
+    const li = findKernelIndexByHash(leftHash, kernelsLeft);
+    if (li >= 0) setLeftIdx(li);
+
+    // right index will be set after right kernels loaded
+    if (rightHash) {
+      // store temporarily in dataset
+      (window as any).__TRITONPARSE_rightHash = rightHash;
+    }
+  }, [kernelsLeft]);
+
+  // Load right URL when set
+  useEffect(() => {
+    async function loadRight(url: string) {
+      try {
+        setLoadingRight(true);
+        setErrorRight(null);
+        const entries = await loadLogData(url);
+        const processed = processKernelData(entries);
+        setKernelsRight(processed);
+        // set right index by hash if present
+        const rightHash = (window as any).__TRITONPARSE_rightHash as string | undefined;
+        if (rightHash) {
+          const ri = findKernelIndexByHash(rightHash, processed);
+          if (ri >= 0) setRightIdx(ri);
+        }
+      } catch (e: any) {
+        setErrorRight(e?.message || String(e));
+      } finally {
+        setLoadingRight(false);
+      }
+    }
+    if (rightLoadedUrl) {
+      loadRight(rightLoadedUrl);
+    }
+  }, [rightLoadedUrl]);
+
+  // Compute union ir types and choose default ir if needed
+  const unionIrTypes = useMemo(() => {
+    const left = kernelsLeft[leftIdx];
+    const right = kernelsRight[rightIdx];
+    const set = new Set<string>();
+    listIRTypesForKernel(left).forEach(t => set.add(t));
+    listIRTypesForKernel(right).forEach(t => set.add(t));
+    if (set.size === 0) return ["python"] as string[];
+    return Array.from(set);
+  }, [kernelsLeft, kernelsRight, leftIdx, rightIdx]);
+
+  useEffect(() => {
+    if (!irType && unionIrTypes.length > 0) setIrType(unionIrTypes[0]);
+  }, [unionIrTypes, irType]);
+
+  // Update URL on state changes (File Diff owns its params)
+  const syncUrl = useCallback(() => {
+    const params = new URLSearchParams(window.location.search);
+    params.set(PARAM_VIEW, "file_diff");
+    // left always present
+    if (kernelsLeft[leftIdx]?.metadata?.hash) params.set(PARAM_KERNEL_HASH_A, String(kernelsLeft[leftIdx].metadata!.hash));
+    else params.delete(PARAM_KERNEL_HASH_A);
+    // right url/hash
+    if (rightLoadedUrl) params.set(PARAM_JSON_B_URL, rightLoadedUrl);
+    else params.delete(PARAM_JSON_B_URL);
+    if (kernelsRight[rightIdx]?.metadata?.hash) params.set(PARAM_KERNEL_HASH_B, String(kernelsRight[rightIdx].metadata!.hash));
+    else params.delete(PARAM_KERNEL_HASH_B);
+    // mode/ir
+    params.set(PARAM_MODE, mode);
+    if (mode === "single" && irType) params.set(PARAM_IR, irType);
+    else params.delete(PARAM_IR);
+    // options
+    params.set(PARAM_IGNORE_WS, ignoreWs ? "1" : "0");
+    params.set(PARAM_WORD_LEVEL, wordLevel ? "1" : "0");
+    params.set(PARAM_CONTEXT, String(contextLines));
+    params.set(PARAM_WRAP, wordWrap);
+    params.set(PARAM_ONLY_CHANGED, onlyChanged ? "1" : "0");
+    const newUrl = new URL(window.location.href);
+    newUrl.search = params.toString();
+    window.history.replaceState({}, "", newUrl.toString());
+  }, [kernelsLeft, kernelsRight, leftIdx, rightIdx, rightLoadedUrl, mode, irType, ignoreWs, wordLevel, contextLines, wordWrap, onlyChanged]);
+
+  useEffect(() => {
+    syncUrl();
+  }, [syncUrl]);
+
+  // UI builders
+  const leftKernel = kernelsLeft[leftIdx];
+  const rightKernel = kernelsRight[rightIdx];
+
+  const renderSingle = () => {
+    const leftContent = getContentByIRType(leftKernel, irType);
+    const rightContent = getContentByIRType(rightKernel, irType);
+    const missingLeft = !leftContent;
+    const missingRight = !rightContent;
+    return (
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-gray-700 font-medium">IR Type: <span className="text-blue-700">{irType}</span></div>
+          <div className="text-sm text-gray-500">
+            {missingLeft && <span className="mr-2">Left: Not available</span>}
+            {missingRight && <span>Right: Not available</span>}
+          </div>
+        </div>
+        <DiffComparisonView
+          leftContent={leftContent}
+          rightContent={rightContent}
+          language={irType === "python" ? "python" : "plaintext"}
+          options={{
+            ignoreWhitespace: ignoreWs,
+            wordLevel,
+            context: contextLines,
+            wordWrap,
+            onlyChanged,
+          }}
+        />
+      </div>
+    );
+  };
+
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const toggle = (t: string) => setExpanded(prev => ({ ...prev, [t]: !prev[t] }));
+
+  const renderAll = () => {
+    return (
+      <div className="space-y-4">
+        {unionIrTypes.map((t) => {
+          const leftContent = getContentByIRType(leftKernel, t);
+          const rightContent = getContentByIRType(rightKernel, t);
+          const missingLeft = !leftContent;
+          const missingRight = !rightContent;
+          const isOpen = !!expanded[t];
+          return (
+            <div key={t} className="border border-gray-200 rounded bg-white">
+              <button
+                className="w-full text-left px-4 py-3 flex items-center justify-between hover:bg-gray-50"
+                onClick={() => toggle(t)}
+              >
+                <div className="font-medium text-gray-800">{t}</div>
+                <div className="text-sm text-gray-500">
+                  {missingLeft && <span className="mr-2">Left: N/A</span>}
+                  {missingRight && <span>Right: N/A</span>}
+                </div>
+              </button>
+              {isOpen && (
+                <div className="px-2 pb-2">
+                  <DiffComparisonView
+                    leftContent={leftContent}
+                    rightContent={rightContent}
+                    language={t === "python" ? "python" : "plaintext"}
+                    options={{
+                      ignoreWhitespace: ignoreWs,
+                      wordLevel,
+                      context: contextLines,
+                      wordWrap,
+                      onlyChanged,
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  // Right source loader
+  const [pendingUrl, setPendingUrl] = useState<string>("");
+  const [rightLoadedFromLocal, setRightLoadedFromLocal] = useState<boolean>(false);
+  const handleLoadRight = async () => {
+    if (!pendingUrl) return;
+    setRightLoadedFromLocal(false);
+    setRightLoadedUrl(pendingUrl);
+  };
+
+  const handleLoadRightLocal = async (file: File | null) => {
+    if (!file) return;
+    try {
+      setLoadingRight(true);
+      setErrorRight(null);
+      const entries = await loadLogDataFromFile(file);
+      const processed = processKernelData(entries);
+      setKernelsRight(processed);
+      setRightLoadedFromLocal(true);
+      setRightLoadedUrl(null); // 不写 json_b_url 到 URL
+      // 选择第一项或按照 hash 恢复
+      const rightHash = (window as any).__TRITONPARSE_rightHash as string | undefined;
+      if (rightHash) {
+        const ri = findKernelIndexByHash(rightHash, processed);
+        setRightIdx(ri >= 0 ? ri : 0);
+      } else {
+        setRightIdx(0);
+      }
+    } catch (e: any) {
+      setErrorRight(e?.message || String(e));
+    } finally {
+      setLoadingRight(false);
+    }
+  };
+
+  return (
+    <div className="p-6">
+      <h1 className="text-2xl font-bold text-gray-800 mb-4">File Diff</h1>
+
+      <div className="bg-white rounded-lg p-4 mb-4 shadow border border-gray-200">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <div className="text-sm text-gray-500 mb-1">Left Source (json_url)</div>
+            <div className="text-gray-800 break-all mb-2">{leftLoadedUrl || "(from local file or default)"}</div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Left Kernel</label>
+            <select
+              className="border border-gray-300 rounded px-3 py-2 bg-white w-full"
+              value={leftIdx}
+              onChange={(e) => setLeftIdx(parseInt(e.target.value))}
+            >
+              {kernelsLeft.map((k, i) => (
+                <option key={`l-${i}`} value={i}>
+                  {k.name} {(k.metadata?.hash || "").slice(0, 8)}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <div className="text-sm text-gray-500 mb-1">Right Source (json_b_url)</div>
+            <div className="flex items-center gap-2 mb-2">
+              <input
+                type="url"
+                placeholder="https://.../trace.ndjson.gz"
+                className="flex-1 border border-gray-300 rounded px-3 py-2"
+                value={pendingUrl}
+                onChange={(e) => setPendingUrl(e.target.value)}
+              />
+              <button
+                className="px-3 py-2 bg-blue-600 text-white rounded"
+                onClick={handleLoadRight}
+                disabled={loadingRight}
+              >
+                {loadingRight ? "Loading..." : "Load"}
+              </button>
+            </div>
+            <div className="flex items-center gap-2 mb-2">
+              <input
+                type="file"
+                accept=".ndjson,.ndjson.gz,.gz,.jsonl"
+                className="block w-full text-sm text-gray-700"
+                onChange={(e) => handleLoadRightLocal(e.target.files?.[0] || null)}
+                disabled={loadingRight}
+              />
+            </div>
+            {rightLoadedUrl && (
+              <div className="text-gray-800 break-all mb-2">{rightLoadedUrl}</div>
+            )}
+            {rightLoadedFromLocal && (
+              <div className="text-gray-600 text-sm mb-2">(loaded from local file)</div>
+            )}
+            {errorRight && (
+              <div className="text-red-600 text-sm mb-2">{errorRight}</div>
+            )}
+            <label className="block text-sm font-medium text-gray-700 mb-1">Right Kernel</label>
+            <select
+              className="border border-gray-300 rounded px-3 py-2 bg-white w-full"
+              value={rightIdx}
+              onChange={(e) => setRightIdx(parseInt(e.target.value))}
+              disabled={kernelsRight.length === 0}
+            >
+              {kernelsRight.map((k, i) => (
+                <option key={`r-${i}`} value={i}>
+                  {k.name} {(k.metadata?.hash || "").slice(0, 8)}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Mode</label>
+            <div className="flex items-center gap-2">
+              <button className={`px-3 py-1 rounded ${mode === "single" ? "bg-blue-600 text-white" : "bg-gray-100"}`} onClick={() => setMode("single")}>Single IR</button>
+              <button className={`px-3 py-1 rounded ${mode === "all" ? "bg-blue-600 text-white" : "bg-gray-100"}`} onClick={() => setMode("all")}>All IRs</button>
+            </div>
+          </div>
+          {mode === "single" && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">IR Type</label>
+              <select
+                className="border border-gray-300 rounded px-3 py-2 bg-white w-full"
+                value={irType}
+                onChange={(e) => setIrType(e.target.value)}
+              >
+                {unionIrTypes.map(t => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Diff Options</label>
+            <div className="flex flex-wrap gap-2">
+              <label className="inline-flex items-center gap-1 text-sm">
+                <input type="checkbox" checked={ignoreWs} onChange={(e) => setIgnoreWs(e.target.checked)} />
+                Ignore whitespace
+              </label>
+              <label className="inline-flex items-center gap-1 text-sm">
+                <input type="checkbox" checked={onlyChanged} onChange={(e) => setOnlyChanged(e.target.checked)} />
+                Only changes
+              </label>
+              <label className="inline-flex items-center gap-1 text-sm">
+                <input type="checkbox" checked={wordLevel} onChange={(e) => setWordLevel(e.target.checked)} />
+                Word-level
+              </label>
+              <label className="inline-flex items-center gap-1 text-sm">
+                <span>Context</span>
+                <input type="number" className="w-16 border border-gray-300 rounded px-2 py-1" value={contextLines} onChange={(e) => setContextLines(parseInt(e.target.value) || 0)} />
+              </label>
+              <label className="inline-flex items-center gap-1 text-sm">
+                <span>Wrap</span>
+                <select className="border border-gray-300 rounded px-2 py-1" value={wordWrap} onChange={(e) => setWordWrap(e.target.value as any)}>
+                  <option value="off">off</option>
+                  <option value="on">on</option>
+                </select>
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {mode === "single" ? renderSingle() : renderAll()}
+    </div>
+  );
+};
+
+export default FileDiffView;
+
+

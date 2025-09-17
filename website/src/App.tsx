@@ -9,6 +9,7 @@ import {
 } from "./utils/dataLoader";
 import { checkFbDirectoryExists } from "./utils/fbDetection";
 import CodeView from "./pages/CodeView";
+import FileDiffView from "./pages/FileDiffView";
 import SingleCodeViewer from "./components/SingleCodeViewer";
 import KernelOverview from "./pages/KernelOverview";
 import DataSourceSelector from "./components/DataSourceSelector";
@@ -27,7 +28,7 @@ function App() {
   const [loading, setLoading] = useState<boolean>(false);
   // Store error message if data loading fails
   const [error, setError] = useState<string | null>(null);
-  // Track active tab (overview or code comparison)
+  // Track active tab (overview, code, file diff)
   const [activeTab, setActiveTab] = useState<string>("overview");
   // Track which IR file is selected for viewing
   const [selectedIR, setSelectedIR] = useState<string | null>(null);
@@ -129,6 +130,8 @@ function App() {
         // Then, determine which view to show
         if (view === "ir_code_comparison") {
           setActiveTab("comparison");
+        } else if (view === "file_diff") {
+          setActiveTab("file_diff");
         }
 
         setDataLoaded(true);
@@ -198,6 +201,8 @@ function App() {
         // Then, determine which view to show
         if (initialView === "ir_code_comparison") {
           setActiveTab("comparison");
+        } else if (initialView === "file_diff") {
+          setActiveTab("file_diff");
         }
         setDataLoaded(true);
         setLoadedUrl(url);
@@ -346,17 +351,30 @@ function App() {
         </div>
       );
     } else {
-      // Show either overview or code comparison based on active tab
-      return activeTab === "overview" ? (
-        <KernelOverview
-          kernels={kernels}
-          onViewIR={handleViewSingleIR}
-          selectedKernel={selectedKernel}
-          onSelectKernel={handleSelectKernel}
-        />
-      ) : (
-        <CodeView kernels={kernels} selectedKernel={selectedKernel} />
-      );
+      // Show selected tab content
+      if (activeTab === "overview") {
+        return (
+          <KernelOverview
+            kernels={kernels}
+            onViewIR={handleViewSingleIR}
+            selectedKernel={selectedKernel}
+            onSelectKernel={handleSelectKernel}
+          />
+        );
+      }
+      if (activeTab === "comparison") {
+        return <CodeView kernels={kernels} selectedKernel={selectedKernel} />;
+      }
+      if (activeTab === "file_diff") {
+        return (
+          <FileDiffView
+            kernelsLeft={kernels}
+            selectedLeftIndex={Math.max(0, selectedKernel)}
+            leftLoadedUrl={loadedUrl}
+          />
+        );
+      }
+      return null;
     }
   };
 
@@ -465,7 +483,20 @@ function App() {
                     }
                   }}
                 >
-                  IR Code Comparison
+                  IR Code
+                </button>
+                <button
+                  className={`px-3 py-2 text-sm font-medium rounded-md ${activeTab === "file_diff" ? "bg-blue-700 text-white shadow-md" : "bg-blue-100 text-blue-700 hover:bg-blue-200"}`}
+                  onClick={() => {
+                    setActiveTab("file_diff");
+                    if (loadedUrl) {
+                      const newUrl = new URL(window.location.href);
+                      newUrl.searchParams.set("view", "file_diff");
+                      window.history.replaceState({}, "", newUrl.toString());
+                    }
+                  }}
+                >
+                  File Diff
                 </button>
               </div>
             )}
@@ -493,15 +524,42 @@ function App() {
                 // Add or remove view parameter
                 if (activeTab === "comparison") {
                   shareableUrl.searchParams.set("view", "ir_code_comparison");
+                  // keep kernel_hash for single-source code view
+                  if (selectedKernel >= 0 && kernels[selectedKernel]?.metadata?.hash) {
+                    shareableUrl.searchParams.set("kernel_hash", kernels[selectedKernel].metadata.hash);
+                  } else {
+                    shareableUrl.searchParams.delete("kernel_hash");
+                  }
+                  // remove file diff params
+                  shareableUrl.searchParams.delete("json_b_url");
+                  shareableUrl.searchParams.delete("kernel_hash_a");
+                  shareableUrl.searchParams.delete("kernel_hash_b");
+                  shareableUrl.searchParams.delete("mode");
+                  shareableUrl.searchParams.delete("ir");
+                  shareableUrl.searchParams.delete("ignore_ws");
+                  shareableUrl.searchParams.delete("word_level");
+                  shareableUrl.searchParams.delete("context");
+                  shareableUrl.searchParams.delete("wrap");
+                  shareableUrl.searchParams.delete("only_changed");
+                } else if (activeTab === "file_diff") {
+                  shareableUrl.searchParams.set("view", "file_diff");
+                  // keep json_url; FileDiffView manages other params internally
+                  // remove single-code kernel_hash to avoid confusion
+                  shareableUrl.searchParams.delete("kernel_hash");
                 } else {
                   shareableUrl.searchParams.delete("view");
-                }
-
-                // Add or remove kernel_hash parameter
-                if (selectedKernel >= 0 && kernels[selectedKernel]?.metadata?.hash) {
-                  shareableUrl.searchParams.set("kernel_hash", kernels[selectedKernel].metadata.hash);
-                } else {
+                  // remove others
                   shareableUrl.searchParams.delete("kernel_hash");
+                  shareableUrl.searchParams.delete("json_b_url");
+                  shareableUrl.searchParams.delete("kernel_hash_a");
+                  shareableUrl.searchParams.delete("kernel_hash_b");
+                  shareableUrl.searchParams.delete("mode");
+                  shareableUrl.searchParams.delete("ir");
+                  shareableUrl.searchParams.delete("ignore_ws");
+                  shareableUrl.searchParams.delete("word_level");
+                  shareableUrl.searchParams.delete("context");
+                  shareableUrl.searchParams.delete("wrap");
+                  shareableUrl.searchParams.delete("only_changed");
                 }
 
                 navigator.clipboard
