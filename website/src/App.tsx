@@ -346,17 +346,29 @@ function App() {
         </div>
       );
     } else {
-      // Show either overview or code comparison based on active tab
-      return activeTab === "overview" ? (
-        <KernelOverview
-          kernels={kernels}
-          onViewIR={handleViewSingleIR}
-          selectedKernel={selectedKernel}
-          onSelectKernel={handleSelectKernel}
-        />
-      ) : (
-        <CodeView kernels={kernels} selectedKernel={selectedKernel} />
-      );
+      // Show either overview, IR code, or file diff based on active tab
+      if (activeTab === "overview") {
+        return (
+          <KernelOverview
+            kernels={kernels}
+            onViewIR={handleViewSingleIR}
+            selectedKernel={selectedKernel}
+            onSelectKernel={handleSelectKernel}
+          />
+        );
+      }
+      if (activeTab === "comparison") {
+        return <CodeView kernels={kernels} selectedKernel={selectedKernel} />;
+      }
+      if (activeTab === "file_diff") {
+        return (
+          <div className="p-6 text-gray-700">
+            <div className="text-lg font-semibold mb-2">File Diff</div>
+            <div>This view is available. Detailed functionality will be introduced in subsequent changes.</div>
+          </div>
+        );
+      }
+      return null;
     }
   };
 
@@ -430,45 +442,57 @@ function App() {
               isLoading={loading}
             />
 
-            {/* Tab navigation (only show when data is loaded and not in IR view) */}
-            {dataLoaded && kernels.length > 0 && !selectedIR && (
-              <div className="flex space-x-4">
-                <button
-                  className={`px-3 py-2 text-sm font-medium rounded-md ${activeTab === "overview" ? "bg-blue-700 text-white shadow-md" : "bg-blue-100 text-blue-700 hover:bg-blue-200"
-                    }`}
-                  onClick={() => {
-                    setActiveTab("overview");
+            {/* Tab navigation: File Diff is always visible; other tabs only when data is loaded and not in IR view */}
+            <div className="flex space-x-4">
+              <button
+                className={`px-3 py-2 text-sm font-medium rounded-md ${activeTab === "file_diff" ? "bg-blue-700 text-white shadow-md" : "bg-blue-100 text-blue-700 hover:bg-blue-200"
+                  }`}
+                onClick={() => {
+                  setActiveTab("file_diff");
+                }}
+              >
+                File Diff
+              </button>
 
-                    // Update URL parameters when switching to overview
-                    if (loadedUrl) {
-                      const newUrl = new URL(window.location.href);
-                      // Remove view parameter but keep kernel_hash
-                      newUrl.searchParams.delete("view");
-                      window.history.replaceState({}, "", newUrl.toString());
-                    }
-                  }}
-                >
-                  Kernel Overview
-                </button>
-                <button
-                  className={`px-3 py-2 text-sm font-medium rounded-md ${activeTab === "comparison" ? "bg-blue-700 text-white shadow-md" : "bg-blue-100 text-blue-700 hover:bg-blue-200"
-                    }`}
-                  onClick={() => {
-                    setActiveTab("comparison");
+              {dataLoaded && kernels.length > 0 && !selectedIR && (
+                <>
+                  <button
+                    className={`px-3 py-2 text-sm font-medium rounded-md ${activeTab === "overview" ? "bg-blue-700 text-white shadow-md" : "bg-blue-100 text-blue-700 hover:bg-blue-200"
+                      }`}
+                    onClick={() => {
+                      setActiveTab("overview");
 
-                    // Update URL parameters when switching to comparison view
-                    if (loadedUrl) {
-                      const newUrl = new URL(window.location.href);
-                      // Add view parameter
-                      newUrl.searchParams.set("view", "ir_code_comparison");
-                      window.history.replaceState({}, "", newUrl.toString());
-                    }
-                  }}
-                >
-                  IR Code Comparison
-                </button>
-              </div>
-            )}
+                      // Update URL parameters when switching to overview
+                      if (loadedUrl) {
+                        const newUrl = new URL(window.location.href);
+                        // Remove view parameter but keep kernel_hash
+                        newUrl.searchParams.delete("view");
+                        window.history.replaceState({}, "", newUrl.toString());
+                      }
+                    }}
+                  >
+                    Kernel Overview
+                  </button>
+                  <button
+                    className={`px-3 py-2 text-sm font-medium rounded-md ${activeTab === "comparison" ? "bg-blue-700 text-white shadow-md" : "bg-blue-100 text-blue-700 hover:bg-blue-200"
+                      }`}
+                    onClick={() => {
+                      setActiveTab("comparison");
+
+                      // Update URL parameters when switching to comparison view
+                      if (loadedUrl) {
+                        const newUrl = new URL(window.location.href);
+                        // Add view parameter
+                        newUrl.searchParams.set("view", "ir_code_comparison");
+                        window.history.replaceState({}, "", newUrl.toString());
+                      }
+                    }}
+                  >
+                    IR Code
+                  </button>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </header>
