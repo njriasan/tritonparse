@@ -28,10 +28,17 @@ interface AppControls {
   setDataLoaded?: (b: boolean) => void;
 }
 
+interface PreviewState {
+  active: boolean;
+  side: 'left' | 'right' | null;
+  view: 'overview' | 'ir' | null;
+}
+
 interface FileDiffSessionApi {
   left: SideState;
   right: SideState;
   options: DiffOptionsState;
+  preview: PreviewState;
   setLeftFromUrl: (url: string, kernels: ProcessedKernel[]) => void;
   setLeftFromLocal: (kernels: ProcessedKernel[]) => void;
   setRightFromUrl: (url: string, kernels: ProcessedKernel[]) => void;
@@ -41,6 +48,8 @@ interface FileDiffSessionApi {
   setOptions: (partial: Partial<DiffOptionsState>) => void;
   reset: () => void;
   registerAppControls: (ctrls: AppControls) => void;
+  setPreview: (p: PreviewState) => void;
+  clearPreview: () => void;
   gotoOverview: (side: 'left' | 'right') => void;
   gotoIRCode: (side: 'left' | 'right') => void;
 }
@@ -63,6 +72,7 @@ export const FileDiffSessionProvider: React.FC<{ children: React.ReactNode }> = 
   const [left, setLeft] = useState<SideState>(defaultSide);
   const [right, setRight] = useState<SideState>(defaultSide);
   const [options, setOptionsState] = useState<DiffOptionsState>(defaultOptions);
+  const [preview, setPreviewState] = useState<PreviewState>({ active: false, side: null, view: null });
 
   const appControlsRef = useRef<AppControls>({});
 
@@ -70,6 +80,7 @@ export const FileDiffSessionProvider: React.FC<{ children: React.ReactNode }> = 
     left,
     right,
     options,
+    preview,
     setLeftFromUrl: (url, kernels) => setLeft({ sourceType: 'url', url, kernels, selectedIdx: 0 }),
     setLeftFromLocal: (kernels) => setLeft({ sourceType: 'local', url: null, kernels, selectedIdx: 0 }),
     setRightFromUrl: (url, kernels) => setRight({ sourceType: 'url', url, kernels, selectedIdx: 0 }),
@@ -77,44 +88,35 @@ export const FileDiffSessionProvider: React.FC<{ children: React.ReactNode }> = 
     setLeftIdx: (idx) => setLeft(prev => ({ ...prev, selectedIdx: idx })),
     setRightIdx: (idx) => setRight(prev => ({ ...prev, selectedIdx: idx })),
     setOptions: (partial) => setOptionsState(prev => ({ ...prev, ...partial })),
-    reset: () => { setLeft(defaultSide); setRight(defaultSide); setOptionsState(defaultOptions); },
+    reset: () => { setLeft(defaultSide); setRight(defaultSide); setOptionsState(defaultOptions); setPreviewState({ active: false, side: null, view: null }); },
     registerAppControls: (ctrls) => { appControlsRef.current = ctrls; },
+    setPreview: (p) => setPreviewState(p),
+    clearPreview: () => setPreviewState({ active: false, side: null, view: null }),
     gotoOverview: (side) => {
       const s = side === 'left' ? left : right;
       if (!s || s.kernels.length === 0) return;
-      const { setKernels, setLoadedUrl, setActiveTab, setSelectedKernel, setDataLoaded } = appControlsRef.current;
-      // Defer navigation to allow DiffEditor to unmount cleanly (avoid TextModel dispose race)
+      const { setActiveTab } = appControlsRef.current;
+      setPreviewState({ active: true, side, view: 'overview' });
       setTimeout(() => {
-        const idx = Math.min(Math.max(0, s.selectedIdx), Math.max(0, s.kernels.length - 1));
-        setKernels?.(s.kernels);
-        setLoadedUrl?.(s.url ?? null);
-        setSelectedKernel?.(idx);
-        setDataLoaded?.(true);
         setActiveTab?.('overview');
         const newUrl = new URL(window.location.href);
         newUrl.searchParams.delete('view');
-        if (s.url) newUrl.searchParams.set('json_url', s.url); else newUrl.searchParams.delete('json_url');
         window.history.replaceState({}, '', newUrl.toString());
       }, 0);
     },
     gotoIRCode: (side) => {
       const s = side === 'left' ? left : right;
       if (!s || s.kernels.length === 0) return;
-      const { setKernels, setLoadedUrl, setActiveTab, setSelectedKernel, setDataLoaded } = appControlsRef.current;
+      const { setActiveTab } = appControlsRef.current;
+      setPreviewState({ active: true, side, view: 'ir' });
       setTimeout(() => {
-        const idx = Math.min(Math.max(0, s.selectedIdx), Math.max(0, s.kernels.length - 1));
-        setKernels?.(s.kernels);
-        setLoadedUrl?.(s.url ?? null);
-        setSelectedKernel?.(idx);
-        setDataLoaded?.(true);
         setActiveTab?.('comparison');
         const newUrl = new URL(window.location.href);
         newUrl.searchParams.set('view', 'ir_code_comparison');
-        if (s.url) newUrl.searchParams.set('json_url', s.url); else newUrl.searchParams.delete('json_url');
         window.history.replaceState({}, '', newUrl.toString());
       }, 0);
     },
-  }), [left, right, options]);
+  }), [left, right, options, preview]);
 
   return (
     <FileDiffSessionContext.Provider value={api}>{children}</FileDiffSessionContext.Provider>

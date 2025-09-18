@@ -196,6 +196,23 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
     } catch {}
   }, [sess, kernelsLeft, leftLoadedUrl, leftIdx]);
 
+  // Hydrate right from session when returning from preview (ensure right side is restored without reloading URL)
+  useEffect(() => {
+    try {
+      if (sess.right?.kernels?.length > 0 && kernelsRight.length === 0) {
+        setKernelsRight(sess.right.kernels);
+        setRightIdx(Math.max(0, sess.right.selectedIdx));
+        if (sess.right.sourceType === 'url') {
+          setRightLoadedUrl(sess.right.url);
+          setRightLoadedFromLocal(false);
+        } else if (sess.right.sourceType === 'local') {
+          setRightLoadedUrl(null);
+          setRightLoadedFromLocal(true);
+        }
+      }
+    } catch {}
+  }, [sess.right, kernelsRight.length]);
+
   // Compute union ir types and choose default ir if needed
   const unionIrTypes = useMemo(() => {
     const leftArray = leftLoadedFromLocal

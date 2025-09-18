@@ -93,6 +93,13 @@ function App() {
     });
   }, []); // Empty dependency array means this runs once on mount
 
+  // Clear FileDiff preview when switching back to File Diff tab (outside render)
+  useEffect(() => {
+    if (activeTab === 'file_diff' && sess.preview?.active) {
+      sess.clearPreview();
+    }
+  }, [activeTab]);
+
   // Register app controls for FileDiff session navigation
   useEffect(() => {
     sess.registerAppControls({
@@ -377,6 +384,20 @@ function App() {
     } else {
       // Show selected tab content
       if (activeTab === "overview") {
+        // If preview is active, render from session
+        if (sess.preview.active && sess.preview.side) {
+          const side = sess.preview.side;
+          const s = side === 'left' ? sess.left : sess.right;
+          const idx = Math.min(Math.max(0, s.selectedIdx), Math.max(0, s.kernels.length - 1));
+          return (
+            <KernelOverview
+              kernels={s.kernels}
+              onViewIR={handleViewSingleIR}
+              selectedKernel={idx}
+              onSelectKernel={() => {}}
+            />
+          );
+        }
         return (
           <KernelOverview
             kernels={kernels}
@@ -387,6 +408,12 @@ function App() {
         );
       }
       if (activeTab === "comparison") {
+        if (sess.preview.active && sess.preview.side) {
+          const side = sess.preview.side;
+          const s = side === 'left' ? sess.left : sess.right;
+          const idx = Math.min(Math.max(0, s.selectedIdx), Math.max(0, s.kernels.length - 1));
+          return <CodeView kernels={s.kernels} selectedKernel={idx} />;
+        }
         return <CodeView kernels={kernels} selectedKernel={selectedKernel} />;
       }
       if (activeTab === "file_diff") {
