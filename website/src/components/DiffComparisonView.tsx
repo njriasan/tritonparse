@@ -21,7 +21,7 @@ const DiffComparisonView: React.FC<DiffComparisonViewProps> = ({
   leftContent,
   rightContent,
   language = "plaintext",
-  height = "calc(100vh - 16rem)",
+  height = "calc(100vh - 12rem)",
   options,
 }) => {
   const monacoOptions = useMemo(() => {
@@ -160,8 +160,6 @@ const DiffComparisonView: React.FC<DiffComparisonViewProps> = ({
         // Ensure both panes use the same wrapping and scrollbar behavior
         onMount={(editor: any) => {
           try {
-            // Expose for optional console debugging
-            (window as any).__DIFF = editor;
             editorRef.current = editor;
 
             const applyWrap = (_when: string) => {
@@ -205,3 +203,5 @@ const DiffComparisonView: React.FC<DiffComparisonViewProps> = ({
 };
 
 export default DiffComparisonView;
+
+
