@@ -143,8 +143,7 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
           try { if (li >= 0) sess.setLeftIdx(li); } catch {}
         }
       } catch (e) {
-        console.warn('[FDV] loadLeft(URL) error:', e);
-        // ignore errors here; show via UI if needed later
+        console.warn("[FDV] loadLeft(URL) error:", e);
       }
     }
     if (leftLoadedUrlLocal) {
@@ -423,7 +422,6 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
       setLeftLoadedFromLocal(true);
       setLeftLoadedUrlLocal(null);
       sess.setLeftFromLocal(processed);
-      console.debug('[FDV] loadLeft(Local): kernels=', processed.length);
       // select first by default
       setLeftIdx(0);
       try { sess.setLeftIdx(0); } catch {}
@@ -439,14 +437,14 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
   };
 
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold text-gray-800 mb-3">File Diff</h1>
+    <div className="p-4">
+      <h1 className="text-xl font-semibold text-gray-800 mb-2">File Diff</h1>
 
-      <div className="bg-white rounded-lg p-3 mb-3 shadow border border-gray-200">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div className="bg-white rounded-lg p-3 mb-3 border border-gray-200">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
           <div>
             <div className="text-sm text-gray-500 mb-1">Left Source (json_url)</div>
-            <div className="flex items-center gap-2 mb-2">
+            <div className="flex items-center gap-2 mb-1">
               <input
                 type="url"
                 placeholder="https://.../trace.ndjson.gz"
@@ -461,7 +459,7 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
                 Load
               </button>
             </div>
-            <div className="flex items-center gap-2 mb-2">
+            <div className="flex items-center gap-2 mb-1">
               <input
                 type="file"
                 accept=".ndjson,.ndjson.gz,.gz,.jsonl"
@@ -481,14 +479,14 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
               <button
                 className="px-2 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded border"
                 disabled={leftArrayResolved.length === 0}
-                onClick={() => { console.debug('[FDV] click Left→Overview', { leftIdx }); setHideDiff(true); setTimeout(() => sess.gotoOverview('left'), 0); }}
+                onClick={() => { setHideDiff(true); setTimeout(() => sess.gotoOverview('left'), 0); }}
               >
                 Left → Kernel Overview
               </button>
               <button
                 className="px-2 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded border"
                 disabled={leftArrayResolved.length === 0}
-                onClick={() => { console.debug('[FDV] click Left→IR', { leftIdx }); setHideDiff(true); setTimeout(() => sess.gotoIRCode('left'), 0); }}
+                onClick={() => { setHideDiff(true); setTimeout(() => sess.gotoIRCode('left'), 0); }}
               >
                 Left → IR Code
               </button>
@@ -496,7 +494,7 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
           </div>
           <div>
             <div className="text-sm text-gray-500 mb-1">Right Source (json_b_url)</div>
-            <div className="flex items-center gap-2 mb-2">
+            <div className="flex items-center gap-2 mb-1">
               <input
                 type="url"
                 placeholder="https://.../trace.ndjson.gz"
@@ -512,7 +510,7 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
                 {loadingRight ? "Loading..." : "Load"}
               </button>
             </div>
-            <div className="flex items-center gap-2 mb-2">
+            <div className="flex items-center gap-2 mb-1">
               <input
                 type="file"
                 accept=".ndjson,.ndjson.gz,.gz,.jsonl"
@@ -551,7 +549,7 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
         </div>
 
         {/* Aligned kernel selectors row */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Left Kernel</label>
             <select
@@ -584,7 +582,7 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mt-2">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Mode</label>
             <div className="flex items-center gap-2">

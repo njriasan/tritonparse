@@ -288,6 +288,13 @@ function App() {
     });
   }, [sess, setActiveTab]);
 
+  // Clear FileDiff preview when entering/returning to File Diff to avoid preview intercepting other views
+  useEffect(() => {
+    if (activeTab === 'file_diff' && sess.preview.active) {
+      sess.clearPreview();
+    }
+  }, [activeTab, sess]);
+
   // Show loading indicator while data is being fetched
   if (loading) {
     return (
@@ -343,6 +350,7 @@ function App() {
       if (sess.preview.view === 'overview') {
         return (
           <KernelOverview
+            key={`preview-overview-${sess.preview.side}-${idx}`}
             kernels={kernelsSrc}
             onViewIR={handleViewSingleIR}
             selectedKernel={idx}
@@ -351,11 +359,26 @@ function App() {
         );
       }
       if (sess.preview.view === 'ir') {
-        return <CodeView kernels={kernelsSrc} selectedKernel={idx} />;
+        return (
+          <CodeView
+            key={`preview-ir-${sess.preview.side}-${idx}`}
+            kernels={kernelsSrc}
+            selectedKernel={idx}
+          />
+        );
       }
       return null;
     } else if (!dataLoaded) {
-      // Show welcome screen if no data is loaded
+      // Show welcome screen if no data is loaded, but allow File Diff tab to render its view when selected
+      if (activeTab === 'file_diff') {
+        return (
+          <FileDiffView
+            kernelsLeft={kernels}
+            selectedLeftIndex={Math.max(0, selectedKernel)}
+            leftLoadedUrl={loadedUrl}
+          />
+        );
+      }
       return (
         <WelcomeScreen
           loadDefaultData={loadDefaultData}
@@ -389,7 +412,13 @@ function App() {
         );
       }
       if (activeTab === "comparison") {
-        return <CodeView kernels={kernels} selectedKernel={selectedKernel} />;
+        return (
+          <CodeView
+            key={`codeview-main-${selectedKernel}`}
+            kernels={kernels}
+            selectedKernel={selectedKernel}
+          />
+        );
       }
       if (activeTab === "file_diff") {
         return (
@@ -474,30 +503,19 @@ function App() {
               isLoading={loading}
             />
 
-            {/* Tab navigation: File Diff is always visible; other tabs only when data is loaded and not in IR view */}
+            {/* Tab navigation: File Diff button placed as the last (rightmost) button */}
             <div className="flex space-x-4">
-              <button
-                className={`px-3 py-2 text-sm font-medium rounded-md ${activeTab === "file_diff" ? "bg-blue-700 text-white shadow-md" : "bg-blue-100 text-blue-700 hover:bg-blue-200"
-                  }`}
-                onClick={() => {
-                  setActiveTab("file_diff");
-                }}
-              >
-                File Diff
-              </button>
-
               {dataLoaded && kernels.length > 0 && !selectedIR && (
                 <>
                   <button
                     className={`px-3 py-2 text-sm font-medium rounded-md ${activeTab === "overview" ? "bg-blue-700 text-white shadow-md" : "bg-blue-100 text-blue-700 hover:bg-blue-200"
                       }`}
                     onClick={() => {
+                      if (sess.preview?.active) sess.clearPreview();
                       setActiveTab("overview");
 
-                      // Update URL parameters when switching to overview
                       if (loadedUrl) {
                         const newUrl = new URL(window.location.href);
-                        // Remove view parameter but keep kernel_hash
                         newUrl.searchParams.delete("view");
                         window.history.replaceState({}, "", newUrl.toString());
                       }
@@ -509,12 +527,11 @@ function App() {
                     className={`px-3 py-2 text-sm font-medium rounded-md ${activeTab === "comparison" ? "bg-blue-700 text-white shadow-md" : "bg-blue-100 text-blue-700 hover:bg-blue-200"
                       }`}
                     onClick={() => {
+                      if (sess.preview?.active) sess.clearPreview();
                       setActiveTab("comparison");
 
-                      // Update URL parameters when switching to comparison view
                       if (loadedUrl) {
                         const newUrl = new URL(window.location.href);
-                        // Add view parameter
                         newUrl.searchParams.set("view", "ir_code_comparison");
                         window.history.replaceState({}, "", newUrl.toString());
                       }
@@ -524,6 +541,17 @@ function App() {
                   </button>
                 </>
               )}
+
+              <button
+                className={`px-3 py-2 text-sm font-medium rounded-md ${activeTab === "file_diff" ? "bg-blue-700 text-white shadow-md" : "bg-blue-100 text-blue-700 hover:bg-blue-200"
+                  }`}
+                onClick={() => {
+                  if (sess.preview?.active) sess.clearPreview();
+                  setActiveTab("file_diff");
+                }}
+              >
+                File Diff
+              </button>
             </div>
           </div>
         </div>
