@@ -133,12 +133,18 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
         setLeftKernelsFromUrl(processed);
         setLeftLoadedFromLocal(false);
         sess.setLeftFromUrl(url, processed);
+        console.log('[FDV] loadLeft(URL): url=', url, 'kernels.len=', processed.length);
+        // default to first kernel when loading new source
+        setLeftIdx(0);
+        try { sess.setLeftIdx(0); } catch {}
         const leftHash = (window as any).__TRITONPARSE_leftHash as string | undefined;
         if (leftHash) {
           const li = findKernelIndexByHash(leftHash, processed);
           if (li >= 0) setLeftIdx(li);
+          try { if (li >= 0) sess.setLeftIdx(li); } catch {}
         }
       } catch (e) {
+        console.warn('[FDV] loadLeft(URL) error:', e);
         // ignore errors here; show via UI if needed later
       }
     }
@@ -173,6 +179,23 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
       loadRight(rightLoadedUrl);
     }
   }, [rightLoadedUrl]);
+
+  // Hydrate session left from App props when coming from homepage/top bar load (including local file)
+  useEffect(() => {
+    try {
+      const sessLeftLen = sess.left?.kernels?.length || 0;
+      if (sessLeftLen === 0 && kernelsLeft.length > 0) {
+        if (leftLoadedUrl) {
+          sess.setLeftFromUrl(leftLoadedUrl, kernelsLeft);
+          console.log('[FDV] hydrate session.left from props (URL)', { url: leftLoadedUrl, kernels: kernelsLeft.length });
+        } else {
+          sess.setLeftFromLocal(kernelsLeft);
+          console.log('[FDV] hydrate session.left from props (LOCAL)', { kernels: kernelsLeft.length });
+        }
+        sess.setLeftIdx(Math.max(0, leftIdx));
+      }
+    } catch {}
+  }, [sess, kernelsLeft, leftLoadedUrl, leftIdx]);
 
   // Compute union ir types and choose default ir if needed
   const unionIrTypes = useMemo(() => {
@@ -365,10 +388,15 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
       setLeftLoadedFromLocal(true);
       setLeftLoadedUrlLocal(null);
       sess.setLeftFromLocal(processed);
+      console.log('[FDV] loadLeft(Local): file=', file.name, 'kernels.len=', processed.length);
+      // select first by default
+      setLeftIdx(0);
+      try { sess.setLeftIdx(0); } catch {}
       const leftHash = (window as any).__TRITONPARSE_leftHash as string | undefined;
       if (leftHash) {
         const li = findKernelIndexByHash(leftHash, processed);
         setLeftIdx(li >= 0 ? li : 0);
+        try { if (li >= 0) sess.setLeftIdx(li); } catch {}
       } else {
         setLeftIdx(0);
       }
@@ -416,14 +444,14 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
               <button
                 className="px-2 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded border"
                 disabled={leftArrayResolved.length === 0}
-                onClick={() => sess.gotoOverview('left')}
+                onClick={() => { const k = leftArrayResolved[leftIdx]; console.log('[FDV] Left → Kernel Overview click', { leftIdx, haveSess: sess.left?.kernels?.length || 0, name: k?.name, hash: k?.metadata?.hash }); sess.gotoOverview('left'); }}
               >
                 Left → Kernel Overview
               </button>
               <button
                 className="px-2 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded border"
                 disabled={leftArrayResolved.length === 0}
-                onClick={() => sess.gotoIRCode('left')}
+                onClick={() => { const k = leftArrayResolved[leftIdx]; console.log('[FDV] Left → IR Code click', { leftIdx, haveSess: sess.left?.kernels?.length || 0, name: k?.name, hash: k?.metadata?.hash }); sess.gotoIRCode('left'); }}
               >
                 Left → IR Code
               </button>
