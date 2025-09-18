@@ -9,6 +9,7 @@ import {
 } from "./utils/dataLoader";
 import { checkFbDirectoryExists } from "./utils/fbDetection";
 import CodeView from "./pages/CodeView";
+import FileDiffView from "./pages/FileDiffView";
 import SingleCodeViewer from "./components/SingleCodeViewer";
 import KernelOverview from "./pages/KernelOverview";
 import DataSourceSelector from "./components/DataSourceSelector";
@@ -362,10 +363,11 @@ function App() {
       }
       if (activeTab === "file_diff") {
         return (
-          <div className="p-6 text-gray-700">
-            <div className="text-lg font-semibold mb-2">File Diff</div>
-            <div>This view is available. Detailed functionality will be introduced in subsequent changes.</div>
-          </div>
+          <FileDiffView
+            kernelsLeft={kernels}
+            selectedLeftIndex={Math.max(0, selectedKernel)}
+            leftLoadedUrl={loadedUrl}
+          />
         );
       }
       return null;
