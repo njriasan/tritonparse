@@ -16,12 +16,14 @@ import DataSourceSelector from "./components/DataSourceSelector";
 import WelcomeScreen from "./components/WelcomeScreen";
 import ExternalLink from "./components/ExternalLink";
 import { mapLanguageToHighlighter } from "./components/CodeViewer";
+import { useFileDiffSession } from "./context/FileDiffSession";
 
 /**
  * Main application component that handles data loading,
  * state management, and rendering different views.
  */
 function App() {
+  const sess = useFileDiffSession();
   // Store processed kernel data from log file
   const [kernels, setKernels] = useState<ProcessedKernel[]>([]);
   // Track loading state for displaying loading indicator
@@ -279,6 +281,13 @@ function App() {
     }
   };
 
+  // Register app controls for FileDiffSession navigation
+  useEffect(() => {
+    sess.registerAppControls({
+      setActiveTab,
+    });
+  }, [sess, setActiveTab]);
+
   // Show loading indicator while data is being fetched
   if (loading) {
     return (
@@ -324,6 +333,27 @@ function App() {
           onBack={handleBackFromIRView}
         />
       );
+    } else if (sess.preview.active) {
+      const side = sess.preview.side === 'left' ? sess.left : sess.right;
+      const idx = side.selectedIdx ?? 0;
+      const kernelsSrc = side.kernels ?? [];
+      if (!kernelsSrc || kernelsSrc.length === 0) {
+        return <div className="text-red-600">Error: Preview kernel data not available.</div>;
+      }
+      if (sess.preview.view === 'overview') {
+        return (
+          <KernelOverview
+            kernels={kernelsSrc}
+            onViewIR={handleViewSingleIR}
+            selectedKernel={idx}
+            onSelectKernel={() => {}}
+          />
+        );
+      }
+      if (sess.preview.view === 'ir') {
+        return <CodeView kernels={kernelsSrc} selectedKernel={idx} />;
+      }
+      return null;
     } else if (!dataLoaded) {
       // Show welcome screen if no data is loaded
       return (
