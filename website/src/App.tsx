@@ -70,6 +70,9 @@ function App() {
       const newUrl = new URL(window.location.href);
       newUrl.searchParams.set("json_url", jsonUrl);
       window.history.replaceState({}, "", newUrl.toString());
+    } else if (view === "file_diff") {
+      // Allow direct navigation to File Diff even without json_url
+      setActiveTab("file_diff");
     }
 
     // Check if fb directory exists and load internal utils if available
@@ -132,6 +135,8 @@ function App() {
         // Then, determine which view to show
         if (view === "ir_code_comparison") {
           setActiveTab("comparison");
+        } else if (view === "file_diff") {
+          setActiveTab("file_diff");
         }
 
         setDataLoaded(true);
@@ -201,6 +206,8 @@ function App() {
         // Then, determine which view to show
         if (initialView === "ir_code_comparison") {
           setActiveTab("comparison");
+        } else if (initialView === "file_diff") {
+          setActiveTab("file_diff");
         }
         setDataLoaded(true);
         setLoadedUrl(url);
@@ -212,6 +219,8 @@ function App() {
         // Add view and kernel_hash parameters if applicable
         if (initialView === "ir_code_comparison") {
           newUrl.searchParams.set("view", "ir_code_comparison");
+        } else if (initialView === "file_diff") {
+          newUrl.searchParams.set("view", "file_diff");
         }
 
         if (kernelHash) {
