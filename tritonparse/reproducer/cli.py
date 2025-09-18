@@ -11,7 +11,7 @@ def _add_reproducer_args(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument(
         "--out-dir",
-        default=None,
+        default="repro_output",
         help=(
             "Directory to save the reproducer script and context JSON. Defaults to "
             "'repro_output/<kernel_name>/' if not provided."

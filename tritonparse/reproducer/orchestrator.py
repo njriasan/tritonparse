@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from tritonparse.reproducer.ingestion.ndjson import build_context_bundle
+from tritonparse.reproducer.utils import determine_output_paths
 
 from tritonparse.tools.prettify_ndjson import load_ndjson
 from tritonparse.tp_logger import logger
@@ -27,4 +28,7 @@ def reproducer(
     context_bundle = build_context_bundle(events, line_index)
     logger.debug(
         f"Built context bundle for kernel: {context_bundle.kernel_info.function_name}"
+    )
+    out_py_path, temp_json_path = determine_output_paths(
+        out_dir, context_bundle.kernel_info.function_name
     )
