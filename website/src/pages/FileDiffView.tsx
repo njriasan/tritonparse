@@ -62,6 +62,9 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
   const [rightLoadedUrl, setRightLoadedUrl] = useState<string | null>(null);
   const [loadingRight, setLoadingRight] = useState<boolean>(false);
   const [errorRight, setErrorRight] = useState<string | null>(null);
+  // Keep local file name for display
+  const [leftLocalName, setLeftLocalName] = useState<string>("");
+  const [rightLocalName, setRightLocalName] = useState<string>("");
 
   // Selection state
   const [leftIdx, setLeftIdx] = useState<number>(Math.max(0, selectedLeftIndex));
@@ -387,6 +390,8 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
     try {
       setLoadingRight(true);
       setErrorRight(null);
+      setRightLocalName(file.name || "");
+      try { sess.setRightDisplayName(file.name || ""); } catch {}
       const entries = await loadLogDataFromFile(file);
       const processed = processKernelData(entries);
       setKernelsRight(processed);
@@ -416,6 +421,8 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
   const handleLoadLeftLocal = async (file: File | null) => {
     if (!file) return;
     try {
+      setLeftLocalName(file.name || "");
+      try { sess.setLeftDisplayName(file.name || ""); } catch {}
       const entries = await loadLogDataFromFile(file);
       const processed = processKernelData(entries);
       setLeftKernelsFromLocal(processed);
@@ -467,13 +474,10 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
                 onChange={(e) => handleLoadLeftLocal(e.target.files?.[0] || null)}
               />
             </div>
-            {(leftLoadedUrlLocal || leftLoadedUrl || (leftLoadedFromLocal || kernelsLeft.length > 0)) && (
+            {(leftLoadedUrlLocal || leftLoadedUrl || leftLoadedFromLocal) && (
               <div className="text-gray-800 break-all mb-2">
-                {leftLoadedUrlLocal || leftLoadedUrl || "(from local file)"}
+                {leftLoadedFromLocal ? (sess.left.displayName || leftLocalName || "(from local file)") : (leftLoadedUrlLocal || leftLoadedUrl)}
               </div>
-            )}
-            {leftLoadedFromLocal && (
-              <div className="text-gray-600 text-sm mb-2">(loaded from local file)</div>
             )}
             <div className="flex gap-2 mt-1">
               <button
@@ -519,11 +523,8 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
                 disabled={loadingRight}
               />
             </div>
-            {rightLoadedUrl && (
-              <div className="text-gray-800 break-all mb-2">{rightLoadedUrl}</div>
-            )}
-            {rightLoadedFromLocal && (
-              <div className="text-gray-600 text-sm mb-2">(loaded from local file)</div>
+            {(rightLoadedUrl || rightLoadedFromLocal) && (
+              <div className="text-gray-800 break-all mb-2">{rightLoadedFromLocal ? (sess.right.displayName || rightLocalName) : rightLoadedUrl}</div>
             )}
             {errorRight && (
               <div className="text-red-600 text-sm mb-2">{errorRight}</div>

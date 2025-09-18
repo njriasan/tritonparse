@@ -8,6 +8,7 @@ interface SideState {
   url: string | null;
   kernels: ProcessedKernel[];
   selectedIdx: number;
+  displayName?: string;
 }
 
 interface DiffOptionsState {
@@ -52,9 +53,11 @@ interface FileDiffSessionApi {
   clearPreview: () => void;
   gotoOverview: (side: 'left' | 'right') => void;
   gotoIRCode: (side: 'left' | 'right') => void;
+  setLeftDisplayName: (name: string) => void;
+  setRightDisplayName: (name: string) => void;
 }
 
-const defaultSide: SideState = { sourceType: null, url: null, kernels: [], selectedIdx: 0 };
+const defaultSide: SideState = { sourceType: null, url: null, kernels: [], selectedIdx: 0, displayName: "" };
 
 const defaultOptions: DiffOptionsState = {
   mode: 'single',
@@ -81,10 +84,10 @@ export const FileDiffSessionProvider: React.FC<{ children: React.ReactNode }> = 
     right,
     options,
     preview,
-    setLeftFromUrl: (url, kernels) => setLeft({ sourceType: 'url', url, kernels, selectedIdx: 0 }),
-    setLeftFromLocal: (kernels) => setLeft({ sourceType: 'local', url: null, kernels, selectedIdx: 0 }),
-    setRightFromUrl: (url, kernels) => setRight({ sourceType: 'url', url, kernels, selectedIdx: 0 }),
-    setRightFromLocal: (kernels) => setRight({ sourceType: 'local', url: null, kernels, selectedIdx: 0 }),
+    setLeftFromUrl: (url, kernels) => setLeft({ sourceType: 'url', url, kernels, selectedIdx: 0, displayName: url }),
+    setLeftFromLocal: (kernels) => setLeft({ sourceType: 'local', url: null, kernels, selectedIdx: 0, displayName: left.displayName || '' }),
+    setRightFromUrl: (url, kernels) => setRight({ sourceType: 'url', url, kernels, selectedIdx: 0, displayName: url }),
+    setRightFromLocal: (kernels) => setRight({ sourceType: 'local', url: null, kernels, selectedIdx: 0, displayName: right.displayName || '' }),
     setLeftIdx: (idx) => setLeft(prev => ({ ...prev, selectedIdx: idx })),
     setRightIdx: (idx) => setRight(prev => ({ ...prev, selectedIdx: idx })),
     setOptions: (partial) => setOptionsState(prev => ({ ...prev, ...partial })),
@@ -92,6 +95,8 @@ export const FileDiffSessionProvider: React.FC<{ children: React.ReactNode }> = 
     registerAppControls: (ctrls) => { appControlsRef.current = ctrls; },
     setPreview: (p) => setPreviewState(p),
     clearPreview: () => setPreviewState({ active: false, side: null, view: null }),
+    setLeftDisplayName: (name) => setLeft(prev => ({ ...prev, displayName: name })),
+    setRightDisplayName: (name) => setRight(prev => ({ ...prev, displayName: name })),
     gotoOverview: (side) => {
       const s = side === 'left' ? left : right;
       if (!s || s.kernels.length === 0) return;

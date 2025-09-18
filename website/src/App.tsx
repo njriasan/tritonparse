@@ -166,6 +166,7 @@ function App() {
    */
   const handleFileSelected = async (file: File) => {
     await loadData(file);
+    try { sess.setLeftDisplayName?.(file.name || ""); } catch {}
   };
 
   /**
