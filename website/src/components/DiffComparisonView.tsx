@@ -87,10 +87,15 @@ const DiffComparisonView: React.FC<DiffComparisonViewProps> = ({
     return () => {
       try {
         const editor: any = editorRef.current;
-        if (editor && typeof editor.dispose === 'function') {
-          editor.dispose();
+        if (editor) {
+          try { editor.setModel?.(null); } catch {}
+          try { editor.getOriginalEditor?.()?.setModel?.(null); } catch {}
+          try { editor.getModifiedEditor?.()?.setModel?.(null); } catch {}
+          try { editor.dispose?.(); } catch {}
         }
       } catch {}
+      editorRef.current = null as any;
+      try { (window as any).__DIFF = undefined; } catch {}
     };
   }, []);
 
@@ -200,5 +205,3 @@ const DiffComparisonView: React.FC<DiffComparisonViewProps> = ({
 };
 
 export default DiffComparisonView;
-
-
