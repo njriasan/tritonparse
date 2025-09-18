@@ -133,7 +133,6 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
         setLeftKernelsFromUrl(processed);
         setLeftLoadedFromLocal(false);
         sess.setLeftFromUrl(url, processed);
-        console.log('[FDV] loadLeft(URL): url=', url, 'kernels.len=', processed.length);
         // default to first kernel when loading new source
         setLeftIdx(0);
         try { sess.setLeftIdx(0); } catch {}
@@ -187,10 +186,10 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
       if (sessLeftLen === 0 && kernelsLeft.length > 0) {
         if (leftLoadedUrl) {
           sess.setLeftFromUrl(leftLoadedUrl, kernelsLeft);
-          console.log('[FDV] hydrate session.left from props (URL)', { url: leftLoadedUrl, kernels: kernelsLeft.length });
+          
         } else {
           sess.setLeftFromLocal(kernelsLeft);
-          console.log('[FDV] hydrate session.left from props (LOCAL)', { kernels: kernelsLeft.length });
+          
         }
         sess.setLeftIdx(Math.max(0, leftIdx));
       }
@@ -260,6 +259,13 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
   const leftKernel = leftArrayResolved[leftIdx];
   const rightKernel = kernelsRight[rightIdx];
 
+  // When navigating away, temporarily hide diff editors to avoid Monaco dispose race
+  const [hideDiff, setHideDiff] = useState<boolean>(false);
+  useEffect(() => {
+    // Reset when view state changes
+    setHideDiff(false);
+  }, [mode, irType, leftIdx, rightIdx]);
+
   const renderSingle = () => {
     const leftContent = getContentByIRType(leftKernel, irType);
     const rightContent = getContentByIRType(rightKernel, irType);
@@ -274,19 +280,21 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
             {missingRight && <span>Right: Not available</span>}
           </div>
         </div>
-        <DiffComparisonView
-          leftContent={leftContent}
-          rightContent={rightContent}
-          height="calc(100vh - 14rem)"
-          language={irType === "python" ? "python" : "plaintext"}
-          options={{
-            ignoreWhitespace: ignoreWs,
-            wordLevel,
-            context: contextLines,
-            wordWrap,
-            onlyChanged,
-          }}
-        />
+        {!hideDiff && (
+          <DiffComparisonView
+            leftContent={leftContent}
+            rightContent={rightContent}
+            height="calc(100vh - 14rem)"
+            language={irType === "python" ? "python" : "plaintext"}
+            options={{
+              ignoreWhitespace: ignoreWs,
+              wordLevel,
+              context: contextLines,
+              wordWrap,
+              onlyChanged,
+            }}
+          />
+        )}
       </div>
     );
   };
@@ -317,19 +325,21 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
               </button>
               {isOpen && (
                 <div className="px-2 pb-2">
-                  <DiffComparisonView
-                    leftContent={leftContent}
-                    rightContent={rightContent}
-                    height="calc(100vh - 14rem)"
-                    language={t === "python" ? "python" : "plaintext"}
-                    options={{
-                      ignoreWhitespace: ignoreWs,
-                      wordLevel,
-                      context: contextLines,
-                      wordWrap,
-                      onlyChanged,
-                    }}
-                  />
+                  {!hideDiff && (
+                    <DiffComparisonView
+                      leftContent={leftContent}
+                      rightContent={rightContent}
+                      height="calc(100vh - 14rem)"
+                      language={t === "python" ? "python" : "plaintext"}
+                      options={{
+                        ignoreWhitespace: ignoreWs,
+                        wordLevel,
+                        context: contextLines,
+                        wordWrap,
+                        onlyChanged,
+                      }}
+                    />
+                  )}
                 </div>
               )}
             </div>
@@ -388,7 +398,7 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
       setLeftLoadedFromLocal(true);
       setLeftLoadedUrlLocal(null);
       sess.setLeftFromLocal(processed);
-      console.log('[FDV] loadLeft(Local): file=', file.name, 'kernels.len=', processed.length);
+      console.debug('[FDV] loadLeft(Local): kernels=', processed.length);
       // select first by default
       setLeftIdx(0);
       try { sess.setLeftIdx(0); } catch {}
@@ -434,8 +444,10 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
                 onChange={(e) => handleLoadLeftLocal(e.target.files?.[0] || null)}
               />
             </div>
-            {(leftLoadedUrlLocal || leftLoadedUrl) && (
-              <div className="text-gray-800 break-all mb-2">{leftLoadedUrlLocal || leftLoadedUrl}</div>
+            {(leftLoadedUrlLocal || leftLoadedUrl || (leftLoadedFromLocal || kernelsLeft.length > 0)) && (
+              <div className="text-gray-800 break-all mb-2">
+                {leftLoadedUrlLocal || leftLoadedUrl || "(from local file)"}
+              </div>
             )}
             {leftLoadedFromLocal && (
               <div className="text-gray-600 text-sm mb-2">(loaded from local file)</div>
@@ -444,14 +456,14 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
               <button
                 className="px-2 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded border"
                 disabled={leftArrayResolved.length === 0}
-                onClick={() => { const k = leftArrayResolved[leftIdx]; console.log('[FDV] Left → Kernel Overview click', { leftIdx, haveSess: sess.left?.kernels?.length || 0, name: k?.name, hash: k?.metadata?.hash }); sess.gotoOverview('left'); }}
+                onClick={() => { console.debug('[FDV] click Left→Overview', { leftIdx }); setHideDiff(true); setTimeout(() => sess.gotoOverview('left'), 0); }}
               >
                 Left → Kernel Overview
               </button>
               <button
                 className="px-2 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded border"
                 disabled={leftArrayResolved.length === 0}
-                onClick={() => { const k = leftArrayResolved[leftIdx]; console.log('[FDV] Left → IR Code click', { leftIdx, haveSess: sess.left?.kernels?.length || 0, name: k?.name, hash: k?.metadata?.hash }); sess.gotoIRCode('left'); }}
+                onClick={() => { console.debug('[FDV] click Left→IR', { leftIdx }); setHideDiff(true); setTimeout(() => sess.gotoIRCode('left'), 0); }}
               >
                 Left → IR Code
               </button>
@@ -498,14 +510,14 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
               <button
                 className="px-2 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded border"
                 disabled={kernelsRight.length === 0}
-                onClick={() => sess.gotoOverview('right')}
+                onClick={() => { setHideDiff(true); setTimeout(() => sess.gotoOverview('right'), 0); }}
               >
                 Right → Kernel Overview
               </button>
               <button
                 className="px-2 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded border"
                 disabled={kernelsRight.length === 0}
-                onClick={() => sess.gotoIRCode('right')}
+                onClick={() => { setHideDiff(true); setTimeout(() => sess.gotoIRCode('right'), 0); }}
               >
                 Right → IR Code
               </button>

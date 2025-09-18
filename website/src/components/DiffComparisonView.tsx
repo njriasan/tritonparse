@@ -82,6 +82,18 @@ const DiffComparisonView: React.FC<DiffComparisonViewProps> = ({
     } catch {}
   }, [options?.wordWrap]);
 
+  // Ensure diff editor is fully disposed on unmount to avoid Monaco race conditions
+  useEffect(() => {
+    return () => {
+      try {
+        const editor: any = editorRef.current;
+        if (editor && typeof editor.dispose === 'function') {
+          editor.dispose();
+        }
+      } catch {}
+    };
+  }, []);
+
   // Vertical resizable container: keep width 100%, allow drag to change height
   const initialPxHeight = useMemo(() => {
     // If a pixel value is provided, use it directly

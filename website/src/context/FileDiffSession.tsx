@@ -83,32 +83,36 @@ export const FileDiffSessionProvider: React.FC<{ children: React.ReactNode }> = 
       const s = side === 'left' ? left : right;
       if (!s || s.kernels.length === 0) return;
       const { setKernels, setLoadedUrl, setActiveTab, setSelectedKernel, setDataLoaded } = appControlsRef.current;
-      // Ensure selectedIdx in range
-      const idx = Math.min(Math.max(0, s.selectedIdx), Math.max(0, s.kernels.length - 1));
-      setKernels?.(s.kernels);
-      setLoadedUrl?.(s.url ?? null);
-      setSelectedKernel?.(idx);
-      setDataLoaded?.(true);
-      setActiveTab?.('overview');
-      const newUrl = new URL(window.location.href);
-      newUrl.searchParams.delete('view');
-      if (s.url) newUrl.searchParams.set('json_url', s.url); else newUrl.searchParams.delete('json_url');
-      window.history.replaceState({}, '', newUrl.toString());
+      // Defer navigation to allow DiffEditor to unmount cleanly (avoid TextModel dispose race)
+      setTimeout(() => {
+        const idx = Math.min(Math.max(0, s.selectedIdx), Math.max(0, s.kernels.length - 1));
+        setKernels?.(s.kernels);
+        setLoadedUrl?.(s.url ?? null);
+        setSelectedKernel?.(idx);
+        setDataLoaded?.(true);
+        setActiveTab?.('overview');
+        const newUrl = new URL(window.location.href);
+        newUrl.searchParams.delete('view');
+        if (s.url) newUrl.searchParams.set('json_url', s.url); else newUrl.searchParams.delete('json_url');
+        window.history.replaceState({}, '', newUrl.toString());
+      }, 0);
     },
     gotoIRCode: (side) => {
       const s = side === 'left' ? left : right;
       if (!s || s.kernels.length === 0) return;
       const { setKernels, setLoadedUrl, setActiveTab, setSelectedKernel, setDataLoaded } = appControlsRef.current;
-      const idx = Math.min(Math.max(0, s.selectedIdx), Math.max(0, s.kernels.length - 1));
-      setKernels?.(s.kernels);
-      setLoadedUrl?.(s.url ?? null);
-      setSelectedKernel?.(idx);
-      setDataLoaded?.(true);
-      setActiveTab?.('comparison');
-      const newUrl = new URL(window.location.href);
-      newUrl.searchParams.set('view', 'ir_code_comparison');
-      if (s.url) newUrl.searchParams.set('json_url', s.url); else newUrl.searchParams.delete('json_url');
-      window.history.replaceState({}, '', newUrl.toString());
+      setTimeout(() => {
+        const idx = Math.min(Math.max(0, s.selectedIdx), Math.max(0, s.kernels.length - 1));
+        setKernels?.(s.kernels);
+        setLoadedUrl?.(s.url ?? null);
+        setSelectedKernel?.(idx);
+        setDataLoaded?.(true);
+        setActiveTab?.('comparison');
+        const newUrl = new URL(window.location.href);
+        newUrl.searchParams.set('view', 'ir_code_comparison');
+        if (s.url) newUrl.searchParams.set('json_url', s.url); else newUrl.searchParams.delete('json_url');
+        window.history.replaceState({}, '', newUrl.toString());
+      }, 0);
     },
   }), [left, right, options]);
 
