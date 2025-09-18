@@ -199,7 +199,7 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
   // Hydrate right from session when returning from preview (ensure right side is restored without reloading URL)
   useEffect(() => {
     try {
-      if (sess.right?.kernels?.length > 0 && kernelsRight.length === 0) {
+      if (sess.right?.kernels?.length > 0) {
         setKernelsRight(sess.right.kernels);
         setRightIdx(Math.max(0, sess.right.selectedIdx));
         if (sess.right.sourceType === 'url') {
@@ -211,7 +211,7 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
         }
       }
     } catch {}
-  }, [sess.right, kernelsRight.length]);
+  }, [sess.right]);
 
   // Compute union ir types and choose default ir if needed
   const unionIrTypes = useMemo(() => {
@@ -265,14 +265,20 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
     window.history.replaceState({}, "", newUrl.toString());
   }, [kernelsLeft, kernelsRight, leftIdx, rightIdx, rightLoadedUrl, mode, irType, ignoreWs, wordLevel, contextLines, wordWrap, onlyChanged, leftLoadedFromLocal, leftLoadedUrlLocal, leftLoadedUrl, leftKernelsFromLocal, leftKernelsFromUrl]);
 
+  // Debounce URL updates to reduce history churn
   useEffect(() => {
-    syncUrl();
+    const id = setTimeout(() => {
+      syncUrl();
+    }, 200);
+    return () => clearTimeout(id);
   }, [syncUrl]);
 
   // UI builders
-  const leftArrayResolved = leftLoadedFromLocal
-    ? leftKernelsFromLocal
-    : (leftLoadedUrlLocal ? leftKernelsFromUrl : kernelsLeft);
+  const leftArrayResolved = (sess.left?.kernels?.length || 0) > 0
+    ? sess.left.kernels
+    : (leftLoadedFromLocal
+      ? leftKernelsFromLocal
+      : (leftLoadedUrlLocal ? leftKernelsFromUrl : kernelsLeft));
   const leftKernel = leftArrayResolved[leftIdx];
   const rightKernel = kernelsRight[rightIdx];
 

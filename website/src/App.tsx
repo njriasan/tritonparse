@@ -510,6 +510,7 @@ function App() {
                   className={`px-3 py-2 text-sm font-medium rounded-md ${activeTab === "overview" ? "bg-blue-700 text-white shadow-md" : "bg-blue-100 text-blue-700 hover:bg-blue-200"
                     }`}
                   onClick={() => {
+                      if (sess.preview?.active) sess.clearPreview();
                     setActiveTab("overview");
 
                     // Update URL parameters when switching to overview
@@ -529,6 +530,7 @@ function App() {
                     className={`px-3 py-2 text-sm font-medium rounded-md ${activeTab === "comparison" ? "bg-blue-700 text-white shadow-md" : "bg-blue-100 text-blue-700 hover:bg-blue-200"
                       }`}
                     onClick={() => {
+                      if (sess.preview?.active) sess.clearPreview();
                       setActiveTab("comparison");
 
                       // Update URL parameters when switching to comparison view
@@ -546,6 +548,7 @@ function App() {
                 <button
                   className={`px-3 py-2 text-sm font-medium rounded-md ${activeTab === "file_diff" ? "bg-blue-700 text-white shadow-md" : "bg-blue-100 text-blue-700 hover:bg-blue-200"}`}
                   onClick={() => {
+                    if (sess.preview?.active) sess.clearPreview();
                     setActiveTab("file_diff");
                     const newUrl = new URL(window.location.href);
                     newUrl.searchParams.set("view", "file_diff");
