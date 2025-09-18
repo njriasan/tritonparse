@@ -305,6 +305,7 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
         </div>
         {!hideDiff && (
           <DiffComparisonView
+            key={`single-${leftIdx}-${rightIdx}-${irType}`}
             leftContent={leftContent}
             rightContent={rightContent}
             height="calc(100vh - 14rem)"
@@ -350,6 +351,7 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
                 <div className="px-2 pb-2">
                   {!hideDiff && (
                     <DiffComparisonView
+                      key={`all-${t}-${leftIdx}-${rightIdx}`}
                       leftContent={leftContent}
                       rightContent={rightContent}
                       height="calc(100vh - 14rem)"
