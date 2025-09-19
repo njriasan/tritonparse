@@ -66,3 +66,52 @@ def _generate_import_statements(kernel_info) -> tuple[str, str]:
     )
     logger.info("Generated dynamic import for file: %s", file_path)
     return sys_stmt, import_stmt
+
+
+def _parse_kernel_signature(kernel_source_code: str) -> tuple[list[str], list[str]]:
+    """
+    Parses a Triton kernel's source code to distinguish positional args
+    from keyword args (those with default values).
+    """
+    signature_lines = []
+    in_signature = False
+    for line in kernel_source_code.splitlines():
+        # Start capturing lines from 'def'
+        if "def " in line:
+            in_signature = True
+        if in_signature:
+            # Strip comments and leading/trailing whitespace
+            clean_line = line.split("#")[0].strip()
+            signature_lines.append(clean_line)
+            # Stop capturing after the signature ends
+            if "):" in line:
+                break
+
+    full_signature = "".join(signature_lines)
+    # Extract content between the first '(' and the last '):'
+    try:
+        params_str = full_signature[
+            full_signature.find("(") + 1 : full_signature.rfind("):")
+        ]
+    except IndexError as exc:
+        raise ValueError("Could not parse kernel signature.") from exc
+
+    # Clean up and split the parameters string
+    params = [p.strip() for p in params_str.replace("\n", "").split(",") if p.strip()]
+
+    positional_args = []
+    keyword_args = []
+
+    for param in params:
+        if "=" in param:
+            # Keyword arguments have a default value
+            arg_name = param.split("=")[0].strip()
+            keyword_args.append(arg_name)
+        else:
+            # Positional arguments do not have a default value
+            arg_name = param.split(":")[0].strip()
+            positional_args.append(arg_name)
+
+    logger.debug("Parsed positional args: %s", positional_args)
+    logger.debug("Parsed keyword args: %s", keyword_args)
+    return positional_args, keyword_args
