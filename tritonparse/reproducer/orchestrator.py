@@ -2,12 +2,13 @@ from pathlib import Path
 
 from tritonparse.reproducer.ingestion.ndjson import build_context_bundle
 from tritonparse.reproducer.templates.loader import load_template_code
-from tritonparse.reproducer.utils import determine_output_paths
+from tritonparse.reproducer.utils import (
+    _generate_import_statements,
+    determine_output_paths,
+)
 
 from tritonparse.tools.prettify_ndjson import load_ndjson, save_prettified_json
 from tritonparse.tp_logger import logger
-
-TEMPLATE_PATH = Path(__file__).parent / "templates" / "example.py"
 
 
 def reproducer(
@@ -39,3 +40,7 @@ def reproducer(
     save_prettified_json(context_bundle.raw_launch_event, temp_json_path)
     logger.debug("Loading reproducer template.")
     template_code = load_template_code(template)
+    final_code = template_code.replace("{{JSON_PATH_PLACEHOLDER}}", str(temp_json_path))
+    sys_stmt, import_statement = _generate_import_statements(context_bundle.kernel_info)
+    final_code = final_code.replace("# {{KERNEL_SYSPATH_PLACEHOLDER}}", sys_stmt)
+    final_code = final_code.replace("# {{KERNEL_IMPORT_PLACEHOLDER}}", import_statement)

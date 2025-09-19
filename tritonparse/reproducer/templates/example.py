@@ -7,6 +7,8 @@ from pathlib import Path
 
 import torch
 
+# {{KERNEL_SYSPATH_PLACEHOLDER}}
+
 # {{KERNEL_IMPORT_PLACEHOLDER}}
 
 TRITON_KERNELS_CUSTOM_TYPES = (
