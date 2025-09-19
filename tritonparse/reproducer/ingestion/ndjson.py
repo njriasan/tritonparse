@@ -26,6 +26,8 @@ class ContextBundle:
     launch: Dict[str, Any]
     args: Dict[str, Any]
     tensor_args: Dict[str, Any]
+    raw_launch_event: Dict[str, Any]
+    raw_comp_event: Dict[str, Any]
 
 
 def get_launch_and_compilation_events(
@@ -225,5 +227,11 @@ def build_context_bundle(
     }
 
     return ContextBundle(
-        kernel_info, compile_block, launch_block, primitive_args, tensor_args
+        kernel_info,
+        compile_block,
+        launch_block,
+        primitive_args,
+        tensor_args,
+        launch_event,
+        comp_event,
     )

@@ -3,7 +3,7 @@ from pathlib import Path
 from tritonparse.reproducer.ingestion.ndjson import build_context_bundle
 from tritonparse.reproducer.utils import determine_output_paths
 
-from tritonparse.tools.prettify_ndjson import load_ndjson
+from tritonparse.tools.prettify_ndjson import load_ndjson, save_prettified_json
 from tritonparse.tp_logger import logger
 
 
@@ -32,3 +32,4 @@ def reproducer(
     out_py_path, temp_json_path = determine_output_paths(
         out_dir, context_bundle.kernel_info.function_name
     )
+    save_prettified_json(context_bundle.raw_launch_event, temp_json_path)
