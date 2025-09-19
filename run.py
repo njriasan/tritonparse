@@ -38,9 +38,10 @@ def main():
         unified_parse(**parse_kwargs)
     elif args.func == "reproduce":
         run_reproducer(
-            input_path=args.ndjson_file,
+            input_path=args.input,
             line_index=args.line_index,
             out_dir=args.out_dir,
+            template=args.template,
         )
 
 
