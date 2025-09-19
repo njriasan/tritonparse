@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.3] - 2025-09-19
+
+### TritonParse Release Notes (last 15 commits)
+
+- **Date range**: 2025-09-13 — 2025-09-18
+- **Scope**: Website UI/UX, core library, CI/CD & packaging, documentation & testing.
+
+### Highlights
+- **Website File Diff tooling**: Introduced a new Diff Comparison view and File Diff page, preserved diff sessions across navigation, integrated Monaco editor, added preview mode, and shipped a round of UI polish with a URL redirect fix for File Diff navigation.
+- **Kernel Overview**: Added a tiled kernel view toggle to improve dense overviews.
+- **Core**: Added lazy-import support for Triton repo `triton_kernels` custom types, attribution check for `torch._utils_internal`, and safer file mapping cleanup in the log parser.
+- **CI/Packaging**: Refactored dependencies in `pyproject.toml`, removed a legacy Triton install script, and updated GitHub Actions workflows.
+- **Docs & tests**: Improved README guidance; added tests and example outputs; minor UI bug fix in `CopyCodeButton` SVG attributes.
+
+### Changes by area
+- **Website UI/UX**
+  - Introduce `DiffComparisonView` and `FileDiffView`; maintain diff session state; integrate Monaco editor; preview mode; UI polish and navigation fixes.
+  - Add tiled kernel view toggle in `KernelOverview`.
+
+- **Core library**
+  - Lazy-import support for `triton_kernels` custom types; extend tensor handling in tests.
+  - Add attribution check for `torch._utils_internal`.
+  - Refactor file mapping cleanup in `parse_logs`.
+
+- **CI/CD & packaging**
+  - Refactor dependencies in `pyproject.toml`; remove `.ci/install-triton-pip.sh`.
+  - Update GitHub Actions workflows; add helper for `triton_kernels` in CI.
+
+- **Docs & testing**
+  - Clarify tool purpose and installation in `README.md`.
+  - Add tests and sample outputs; small UI component fixes.
+
+### Compatibility notes
+- No breaking changes expected. `triton_kernels` support is optional via lazy import.
+
+### Upgrade guidance
+- Reinstall website dependencies if developing the UI to pick up the Monaco editor.
+
 ## [0.2.0] - 2025-09-11
 
 ### TritonParse Release Notes (last 27 commits)
