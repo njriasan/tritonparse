@@ -4,7 +4,7 @@
 import argparse
 
 from tritonparse.reproducer.cli import _add_reproducer_args
-from tritonparse.reproducer.orchestrator import reproducer as run_reproducer
+from tritonparse.reproducer.orchestrator import reproduce as run_reproducer
 
 from tritonparse.utils import _add_parse_args, unified_parse
 

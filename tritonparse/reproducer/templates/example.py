@@ -223,8 +223,9 @@ def _create_arg_from_info(arg_info):
 
 
 if __name__ == "__main__":
-    json_file = "{{JSON_PATH_PLACEHOLDER}}"
-    grid, args_dict = create_args_from_json(json_file)
+    script_dir = Path(__file__).resolve().parent
+    json_file = script_dir / "{{JSON_FILE_NAME_PLACEHOLDER}}"
+    grid, args_dict = create_args_from_json(str(json_file))
 
     print("Generated kernel arguments dictionary:")
     for name, arg in args_dict.items():
@@ -234,4 +235,4 @@ if __name__ == "__main__":
     # {{KERNEL_INVOCATION_PLACEHOLDER}}
 
     torch.cuda.synchronize()
-    print("Kernel launch finished.")
+    print("Kernel execution finished.")

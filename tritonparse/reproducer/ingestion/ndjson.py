@@ -58,20 +58,17 @@ def get_launch_and_compilation_events(
     comp_hash = comp_meta.get("hash")
     if not comp_hash:
         raise RuntimeError("Could not find compilation hash in launch event.")
-
-    comp_event = [
-        event
-        for event in events
-        if event["event_type"] == "compilation" and event.get("hash") == comp_hash
-    ]
+    comp_event = None
+    for event in events:
+        if (
+            event["event_type"] == "compilation"
+            and event.get("payload", {}).get("metadata", {}).get("hash") == comp_hash
+        ):
+            comp_event = event
+            break
     if not comp_event:
         raise RuntimeError(f"Could not find compilation event for hash {comp_hash}.")
-    if len(comp_event) != 1:
-        raise RuntimeError(
-            f"Expected 1 compilation event for hash {comp_hash}, got {len(comp_event)}"
-        )
-
-    return launch_event, comp_event[0]
+    return launch_event, comp_event
 
 
 def get_kernel_info(comp_event: Dict[str, Any]) -> KernelInfo:

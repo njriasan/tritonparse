@@ -13,7 +13,7 @@ from tritonparse.tools.prettify_ndjson import load_ndjson, save_prettified_json
 from tritonparse.tp_logger import logger
 
 
-def reproducer(
+def reproduce(
     input_path: str,
     line_index: int,
     out_dir: str,
@@ -42,14 +42,22 @@ def reproducer(
     save_prettified_json(context_bundle.raw_launch_event, temp_json_path)
     logger.debug("Loading reproducer template.")
     template_code = load_template_code(template)
-    final_code = template_code.replace("{{JSON_PATH_PLACEHOLDER}}", str(temp_json_path))
+    final_code = template_code.replace(
+        "{{JSON_FILE_NAME_PLACEHOLDER}}", temp_json_path.name
+    )
     sys_stmt, import_statement = _generate_import_statements(context_bundle.kernel_info)
     final_code = final_code.replace("# {{KERNEL_SYSPATH_PLACEHOLDER}}", sys_stmt)
     final_code = final_code.replace("# {{KERNEL_IMPORT_PLACEHOLDER}}", import_statement)
-    source_code = context_bundle.kernel_info.get("source_code", "")
+    source_code = context_bundle.kernel_info.source_code
     pos_args, kw_args = _parse_kernel_signature(source_code)
     invocation_snippet = _generate_invocation_snippet(pos_args, kw_args)
     final_code = final_code.replace(
         "# {{KERNEL_INVOCATION_PLACEHOLDER}}", invocation_snippet
     )
     out_py_path.write_text(final_code, encoding="utf-8")
+    logger.info(
+        "REPRODUCER_OUTPUT script=%s json=%s kernel=%s",
+        str(out_py_path.resolve()),
+        str(temp_json_path.resolve()),
+        context_bundle.kernel_info.function_name,
+    )

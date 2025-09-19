@@ -53,7 +53,7 @@ def _generate_import_statements(kernel_info) -> tuple[str, str]:
         import_stmt = (
             f"from {module_name} import {function_name} as imported_kernel_function"
         )
-        logger.info("Generated direct import statement: %s", import_stmt)
+        logger.debug("Generated direct import statement: %s", import_stmt)
         return sys_stmt, import_stmt
 
     # Fallback: dynamic import when filename is not a valid identifier
