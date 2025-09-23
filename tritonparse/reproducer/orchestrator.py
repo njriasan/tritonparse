@@ -4,6 +4,7 @@ from tritonparse.reproducer.ingestion.ndjson import build_context_bundle
 from tritonparse.reproducer.templates.loader import load_template_code
 from tritonparse.reproducer.utils import (
     _generate_import_statements,
+    _parse_kernel_signature,
     determine_output_paths,
 )
 
@@ -46,3 +47,5 @@ def reproduce(
     sys_stmt, import_statement = _generate_import_statements(context_bundle.kernel_info)
     final_code = final_code.replace("# {{KERNEL_SYSPATH_PLACEHOLDER}}", sys_stmt)
     final_code = final_code.replace("# {{KERNEL_IMPORT_PLACEHOLDER}}", import_statement)
+    source_code = context_bundle.kernel_info.source_code
+    pos_args, kw_args = _parse_kernel_signature(source_code)
