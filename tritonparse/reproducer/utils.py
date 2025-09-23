@@ -279,3 +279,24 @@ def _parse_kernel_signature(kernel_source_code: str) -> tuple[list[str], list[st
     logger.debug("Parsed positional args: %s", positional_args)
     logger.debug("Parsed keyword args: %s", keyword_args)
     return positional_args, keyword_args
+
+
+def _generate_invocation_snippet(
+    positional_args: list[str], keyword_args: list[str]
+) -> str:
+    """Generates a single-line Python code snippet for kernel invocation."""
+    # Prepare positional args for direct injection into the call
+    pos_args_str = ", ".join([f'args_dict["{arg}"]' for arg in positional_args])
+
+    # Prepare keyword args for direct injection
+    kw_args_str = ", ".join([f'{arg}=args_dict["{arg}"]' for arg in keyword_args])
+
+    # Combine them, ensuring proper comma separation
+    all_args = []
+    if pos_args_str:
+        all_args.append(pos_args_str)
+    if kw_args_str:
+        all_args.append(kw_args_str)
+
+    # Create the single-line call
+    return f"imported_kernel_function[tuple(grid)]({', '.join(all_args)})"
