@@ -7,6 +7,8 @@ from pathlib import Path
 
 import torch
 
+# {{KERNEL_SYSPATH_PLACEHOLDER}}
+
 # {{KERNEL_IMPORT_PLACEHOLDER}}
 
 TRITON_KERNELS_CUSTOM_TYPES = (
@@ -28,9 +30,9 @@ def _get_triton_tensor_types():
     """
     mod = importlib.import_module("triton_kernels.tensor")
     return (
-        getattr(mod, "Tensor"),
-        getattr(mod, "Storage"),
-        getattr(mod, "StridedLayout"),
+        mod.Tensor,
+        mod.Storage,
+        mod.StridedLayout,
     )
 
 
