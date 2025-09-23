@@ -14,7 +14,9 @@ def main():
     parser = argparse.ArgumentParser(description="tritonparse CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    parse_parser = subparsers.add_parser("parse", help="Parse triton structured logs")
+    parse_parser = subparsers.add_parser(
+        "parse", help="Parse triton structured logs", conflict_handler="resolve"
+    )
     _add_parse_args(parse_parser)
     parse_parser.set_defaults(func="parse")
 
