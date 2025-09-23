@@ -1,14 +1,13 @@
+import hashlib
 import importlib
-import importlib.util
 import json
 import sys
-from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
 
 import torch
 
-from tritonparse.tools.load_tensor import load_tensor
+# {{KERNEL_IMPORT_PLACEHOLDER}}
 
 TRITON_KERNELS_CUSTOM_TYPES = (
     importlib.util.find_spec("triton_kernels") is not None
@@ -18,12 +17,67 @@ TRITON_KERNELS_CUSTOM_TYPES = (
 
 @lru_cache(maxsize=1)
 def _get_triton_tensor_types():
+    """
+    Import and cache Triton custom tensor types.
+
+    Returns:
+        tuple: (Tensor, Storage, StridedLayout) classes from triton_kernels.tensor.
+
+    Raises:
+        ImportError: If the optional module 'triton_kernels.tensor' is not available.
+    """
     mod = importlib.import_module("triton_kernels.tensor")
     return (
         getattr(mod, "Tensor"),
         getattr(mod, "Storage"),
         getattr(mod, "StridedLayout"),
     )
+
+
+def load_tensor(tensor_file_path: str, device: str = None) -> torch.Tensor:
+    """
+    Load a tensor from its file path and verify its integrity using the hash in the filename.
+
+    Args:
+        tensor_file_path (str): Direct path to the tensor .bin file. The filename should be
+                               the hash of the file contents followed by .bin extension.
+        device (str, optional): Device to load the tensor to (e.g., 'cuda:0', 'cpu').
+                               If None, keeps the tensor on its original device.
+
+    Returns:
+        torch.Tensor: The loaded tensor (moved to the specified device if provided)
+
+    Raises:
+        FileNotFoundError: If the tensor file doesn't exist
+        RuntimeError: If the tensor cannot be loaded
+        ValueError: If the computed hash doesn't match the filename hash
+    """
+    blob_path = Path(tensor_file_path)
+
+    if not blob_path.exists():
+        raise FileNotFoundError(f"Tensor blob not found: {blob_path}")
+
+    # Extract expected hash from filename (remove .bin extension)
+    expected_hash = blob_path.stem
+
+    # Compute actual hash of file contents
+    with open(blob_path, "rb") as f:
+        file_contents = f.read()
+        computed_hash = hashlib.blake2b(file_contents).hexdigest()
+
+    # Verify hash matches filename
+    if computed_hash != expected_hash:
+        raise ValueError(
+            f"Hash verification failed: expected '{expected_hash}' but computed '{computed_hash}'"
+        )
+
+    try:
+        # Load the tensor using torch.load (tensors are saved with torch.save)
+        # If device is None, keep tensor on its original device, otherwise move to specified device
+        tensor = torch.load(blob_path, map_location=device)
+        return tensor
+    except Exception as e:
+        raise RuntimeError(f"Failed to load tensor from {blob_path}: {str(e)}") from e
 
 
 def create_args_from_json(json_path):
@@ -123,11 +177,12 @@ def _create_arg_from_info(arg_info):
         # Case 3: Handle other unsigned integers (like uint32) which fail with random_()
         elif "uint" in str(torch_dtype):
             return torch.randint(0, 1000, shape, dtype=torch_dtype, device=device)
-            # Case 4: If we don't know how to handle the type, raise an error
+        # Case 4: If we don't know how to handle the type, raise an error
         else:
             raise NotImplementedError(
                 f"Random data generation not implemented for dtype: {torch_dtype}"
             )
+
     elif arg_type == "triton_kernels.tensor.Tensor":
         if not TRITON_KERNELS_CUSTOM_TYPES:
             raise RuntimeError(
@@ -161,28 +216,22 @@ def _create_arg_from_info(arg_info):
             )
         Tensor, Storage, StridedLayout = _get_triton_tensor_types()
         return StridedLayout(shape=arg_info.get("initial_shape"))
-
     else:
         print(f"Warning: Unhandled argument type '{arg_type}'. Returning None.")
         return None
 
 
-def determine_output_paths(out_dir: str, kernel_name: str):
-    """
-    Determine output file paths for reproducer script and context data.
+if __name__ == "__main__":
+    script_dir = Path(__file__).resolve().parent
+    json_file = script_dir / "{{JSON_FILE_NAME_PLACEHOLDER}}"
+    grid, args_dict = create_args_from_json(str(json_file))
 
-    Args:
-        out_dir: Output directory path. If empty, uses default location.
-        kernel_name: Name of the kernel for default directory naming.
+    print("Generated kernel arguments dictionary:")
+    for name, arg in args_dict.items():
+        print(f"  {name}: {arg}")
+    print(f"Grid: {grid}")
 
-    Returns:
-        Tuple of (python_script_path, json_context_path) as Path objects.
-    """
-    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-    output_directory = Path(out_dir) / kernel_name
-    output_directory.mkdir(parents=True, exist_ok=True)
+    # {{KERNEL_INVOCATION_PLACEHOLDER}}
 
-    out_py_path = output_directory / f"repro_{timestamp}.py"
-    temp_json_path = output_directory / f"repro_context_{timestamp}.json"
-
-    return out_py_path, temp_json_path
+    torch.cuda.synchronize()
+    print("Kernel execution finished.")
