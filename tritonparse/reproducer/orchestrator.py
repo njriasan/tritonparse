@@ -55,3 +55,9 @@ def reproduce(
         "# {{KERNEL_INVOCATION_PLACEHOLDER}}", invocation_snippet
     )
     out_py_path.write_text(final_code, encoding="utf-8")
+    logger.info(
+        "REPRODUCER_OUTPUT script=%s json=%s kernel=%s",
+        str(out_py_path.resolve()),
+        str(temp_json_path.resolve()),
+        context_bundle.kernel_info.function_name,
+    )
