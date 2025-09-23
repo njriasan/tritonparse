@@ -17,3 +17,11 @@ def _add_reproducer_args(parser: argparse.ArgumentParser) -> None:
             "'repro_output/<kernel_name>/' if not provided."
         ),
     )
+    parser.add_argument(
+        "--template",
+        default="example",
+        help=(
+            "Template name (builtin, without .py) or a filesystem path to a .py file. "
+            "Defaults to 'example'."
+        ),
+    )

@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from tritonparse.reproducer.ingestion.ndjson import build_context_bundle
+from tritonparse.reproducer.templates.loader import load_template_code
 from tritonparse.reproducer.utils import determine_output_paths
 
 from tritonparse.tools.prettify_ndjson import load_ndjson, save_prettified_json
@@ -11,6 +12,7 @@ def reproduce(
     input_path: str,
     line_index: int,
     out_dir: str,
+    template: str,
 ):
     """
     Generate a reproducer script from NDJSON trace file.
@@ -33,3 +35,5 @@ def reproduce(
         out_dir, context_bundle.kernel_info.function_name
     )
     save_prettified_json(context_bundle.raw_launch_event, temp_json_path)
+    logger.debug("Loading reproducer template.")
+    template_code = load_template_code(template)

@@ -174,7 +174,7 @@ def load_ndjson(
     except FileNotFoundError:
         print(f"Error: File '{file_path}' not found.", file=sys.stderr)
         raise
-    except Exception as e:
+    except (OSError, UnicodeDecodeError) as e:
         print(f"Error reading file '{file_path}': {e}", file=sys.stderr)
         raise
 
@@ -215,7 +215,7 @@ def save_prettified_json(
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump(json_objects, f, indent=2, ensure_ascii=False, sort_keys=True)
         print(f"Successfully converted to prettified JSON: {output_path}")
-    except Exception as e:
+    except OSError as e:
         print(f"Error writing to file '{output_path}': {e}", file=sys.stderr)
         raise
 
