@@ -29,15 +29,11 @@ def main():
     args = parser.parse_args()
 
     if args.func == "parse":
-        parse_kwargs = {
-            "source": args.source,
-            "out": getattr(args, "out", None),
-            "overwrite": getattr(args, "overwrite", False),
-            "rank": getattr(args, "rank", None),
-            "all_ranks": getattr(args, "all_ranks", False),
-            "verbose": getattr(args, "verbose", False),
+        # Filter out routing-specific arguments before passing to unified_parse
+        parse_args = {
+            k: v for k, v in vars(args).items() if k not in ["command", "func"]
         }
-        unified_parse(**parse_kwargs)
+        unified_parse(**parse_args)
     elif args.func == "reproduce":
         reproduce(
             input_path=args.input,
