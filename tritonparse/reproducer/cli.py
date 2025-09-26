@@ -5,9 +5,13 @@ def _add_reproducer_args(parser: argparse.ArgumentParser) -> None:
     """Add common arguments for the reproducer to a parser."""
     parser.add_argument("input", help="Path to the ndjson/ndjson.gz log file")
     parser.add_argument(
-        "--line-index",
+        "--line",
         type=int,
-        help="The line number of the launch event in the input file to reproduce.",
+        default=1,
+        help=(
+            "The line number (1-based) of the launch event in the input file to reproduce. "
+            "Defaults to 1."
+        ),
     )
     parser.add_argument(
         "--out-dir",

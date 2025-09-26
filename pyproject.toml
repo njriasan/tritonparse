@@ -46,3 +46,6 @@ local_scheme = "no-local-version"
 
 [project.urls]
 "Homepage" = "https://github.com/meta-pytorch/tritonparse"
+
+[project.scripts]
+tritonparse = "tritonparse.cli:main"
