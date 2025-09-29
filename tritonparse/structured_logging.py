@@ -28,8 +28,6 @@ log = logging.getLogger(__name__)
 
 TEXT_FILE_EXTENSIONS = [".ttir", ".ttgir", ".llir", ".ptx", ".amdgcn", ".json"]
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB limit for file content extraction
-# Enable ndjson output. json format is only for debugging purpose.
-TRITONPARSE_NDJSON = os.getenv("TRITONPARSE_NDJSON", "1") in ["1", "true", "True"]
 # Enable gzip compression for each line in trace files
 TRITON_TRACE_GZIP = os.getenv("TRITON_TRACE_GZIP", "0") in ["1", "true", "True"]
 triton_trace_log = logging.getLogger("tritonparse_trace")
@@ -505,12 +503,9 @@ class TritonJsonFormatter(logging.Formatter):
         if payload is not None:
             log_entry["payload"] = json.loads(payload)
         clean_log_entry = convert(log_entry)
-        if not TRITONPARSE_NDJSON:
-            return json.dumps(clean_log_entry, indent=2)
-        else:
-            # NDJSON format requires a newline at the end of each line
-            json_str = json.dumps(clean_log_entry, separators=(",", ":"))
-            return json_str + "\n"
+        # NDJSON format requires a newline at the end of each line
+        json_str = json.dumps(clean_log_entry, separators=(",", ":"))
+        return json_str + "\n"
 
 
 class TritonTraceHandler(logging.StreamHandler):
