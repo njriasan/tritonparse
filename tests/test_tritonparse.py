@@ -776,7 +776,7 @@ class TestTritonparseCUDA(unittest.TestCase):
 
         from tritonparse.tools.prettify_ndjson import load_ndjson as _load_ndjson
 
-        events = _load_ndjson(_Path(ndjson_path), save_irs=True)
+        events = _load_ndjson(_Path(ndjson_path))
         launch_indices = [
             i for i, ev in enumerate(events) if ev.get("event_type") == "launch"
         ]

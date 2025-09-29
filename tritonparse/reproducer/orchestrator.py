@@ -28,7 +28,7 @@ def reproduce(
         out_dir: Output directory for reproducer files.
     """
     logger.debug(f"Building bundle from {input_path} at line {line_index}")
-    events = load_ndjson(Path(input_path), save_irs=True)
+    events = load_ndjson(Path(input_path))
     logger.debug(f"Loaded {len(events)} events")
 
     # Build context bundle from the specified launch event

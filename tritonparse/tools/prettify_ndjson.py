@@ -31,7 +31,7 @@ Example:
 Usage:
     python prettify_ndjson.py data.ndjson
     python prettify_ndjson.py --lines 1,3 data.ndjson  # Only process lines 1 and 3
-    python prettify_ndjson.py --save-irs logs.ndjson   # Keep all fields for compilation events
+    python prettify_ndjson.py --not-save-irs logs.ndjson   # Remove large fields for compilation events
 
 
 """
@@ -99,14 +99,14 @@ def parse_line_ranges(lines_arg: str) -> set[int]:
 
 
 def load_ndjson(
-    file_path: Path, save_irs: bool = False, line_filter: set[int] = None
+    file_path: Path, not_save_irs: bool = False, line_filter: set[int] | None = None
 ) -> List[Any]:
     """
     Load NDJSON file and return list of JSON objects.
 
     Args:
         file_path: Path to the NDJSON file
-        save_irs: Whether to save file_content and python_source for compilation events
+        not_save_irs: Whether to NOT save file_content and python_source for compilation events
         line_filter: Set of line numbers to include (1-based indexing), None means include all
 
     Returns:
@@ -138,8 +138,8 @@ def load_ndjson(
                 try:
                     json_obj = json.loads(line)
 
-                    # Filter out file_content and python_source for compilation events if save_irs is False
-                    if not save_irs and isinstance(json_obj, dict):
+                    # Filter out file_content and python_source for compilation events if not_save_irs is True
+                    if not_save_irs and isinstance(json_obj, dict):
                         event_type = json_obj.get("event_type")
                         if event_type == "compilation":
                             # Remove file_content and python_source from payload if they exist
@@ -188,13 +188,13 @@ def load_ndjson(
             print("Line filtering: no valid lines specified")
 
     # Print warning if compilation events were filtered
-    if not save_irs and filtered_compilation_events > 0:
+    if not_save_irs and filtered_compilation_events > 0:
         print(
             f"WARNING: Removed 'file_content' and 'python_source' fields from {filtered_compilation_events} compilation events to reduce file size.",
             file=sys.stderr,
         )
         print(
-            "         Use --save-irs flag to preserve these fields if needed.",
+            "         Re-run without --not-save-irs flag to preserve these fields if needed.",
             file=sys.stderr,
         )
 
@@ -237,10 +237,10 @@ Examples:
     )
 
     parser.add_argument(
-        "--save-irs",
+        "--not-save-irs",
         action="store_true",
         default=False,
-        help="Save file_content and python_source for compilation events (default: False, removes these fields to reduce size)",
+        help="Do not save file_content and python_source for compilation events (default: False, removes these fields to reduce size)",
     )
 
     parser.add_argument(
@@ -293,12 +293,12 @@ Examples:
 
         # Load NDJSON file
         print(f"Loading NDJSON file: {input_path}")
-        if not args.save_irs:
+        if args.not_save_irs:
             print(
                 "Filtering out file_content and python_source from compilation events to reduce size"
             )
         json_objects = load_ndjson(
-            input_path, save_irs=args.save_irs, line_filter=line_filter
+            input_path, not_save_irs=args.not_save_irs, line_filter=line_filter
         )
         print(f"Loaded {len(json_objects)} JSON objects")
 
