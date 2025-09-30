@@ -41,6 +41,12 @@ TRITONPARSE_KERNEL_ALLOWLIST = os.environ.get("TRITONPARSE_KERNEL_ALLOWLIST", No
 _KERNEL_ALLOWLIST_PATTERNS: Optional[List[str]] = None
 # Enable launch trace. WARNNING: it will overwrite launch_metadata function for each triton kernel.
 TRITON_TRACE_LAUNCH = os.getenv("TRITON_TRACE_LAUNCH", None) in ["1", "true", "True"]
+# Inductor compiled kernel's launch tracing needs this flag to be set.
+# If TRITON_TRACE_LAUNCH is enabled, also enable TORCHINDUCTOR_RUN_JIT_POST_COMPILE_HOOK
+TORCHINDUCTOR_RUN_JIT_POST_COMPILE_HOOK = (
+    os.getenv("TORCHINDUCTOR_RUN_JIT_POST_COMPILE_HOOK", None) in ["1", "true", "True"]
+    or TRITON_TRACE_LAUNCH
+)
 # The flag to mark if launch is traced. It is used to avoid initilizing the launch hook twice.
 _trace_launch_enabled = False
 
@@ -1105,9 +1111,10 @@ def init(trace_folder: Optional[str] = None, enable_trace_launch: bool = False):
         trace_folder (Optional[str]): The folder to store the trace files.
         enable_trace_launch (bool): Whether to enable the trace launch hook.
     """
-    global TRITON_TRACE_LAUNCH
+    global TRITON_TRACE_LAUNCH, TORCHINDUCTOR_RUN_JIT_POST_COMPILE_HOOK
     if enable_trace_launch:
         TRITON_TRACE_LAUNCH = True
+        TORCHINDUCTOR_RUN_JIT_POST_COMPILE_HOOK = True
 
     init_basic(trace_folder)
     from triton import knobs
