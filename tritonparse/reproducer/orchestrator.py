@@ -18,7 +18,7 @@ def reproduce(
     line_index: int,
     out_dir: str,
     template: str,
-):
+) -> dict[str, Path]:
     """
     Generate a reproducer script from NDJSON trace file.
 
@@ -61,3 +61,9 @@ def reproduce(
         str(temp_json_path.resolve()),
         context_bundle.kernel_info.function_name,
     )
+
+    return {
+        "kernel": context_bundle.kernel_info.function_name,
+        "script": str(out_py_path.resolve()),
+        "json": str(temp_json_path.resolve()),
+    }
