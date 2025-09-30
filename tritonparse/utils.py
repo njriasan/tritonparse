@@ -106,6 +106,7 @@ def oss_run(
     else:
         out_dir = str(Path(parsed_log_dir).absolute())
     print_parsed_files_summary(out_dir)
+    return None
 
 
 def unified_parse(
@@ -134,7 +135,7 @@ def unified_parse(
     else:
         parse = oss_run
 
-    parse(
+    output = parse(
         source=source,
         out=out,
         overwrite=overwrite,
@@ -143,3 +144,4 @@ def unified_parse(
         verbose=verbose,
         **kwargs,
     )
+    return output
