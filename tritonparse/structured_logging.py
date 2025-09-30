@@ -1129,7 +1129,7 @@ def init_basic(trace_folder: Optional[str] = None):
 def init(
     trace_folder: Optional[str] = None,
     enable_trace_launch: bool = False,
-    enable_sass_dump: Optional[bool] = None,
+    enable_sass_dump: Optional[bool] = False,
 ):
     """
     This function is a wrapper around init_basic() that also sets up the compilation listener. Its arguments have higher priority than the environment variables for same settings.
@@ -1137,12 +1137,12 @@ def init(
     Args:
         trace_folder (Optional[str]): The folder to store the trace files.
         enable_trace_launch (bool): Whether to enable the trace launch hook.
-        enable_sass_dump (Optional[bool]): Whether to enable SASS dumping. If None, uses environment variable.
+        enable_sass_dump (Optional[bool]): Whether to enable SASS dumping.
     """
     global TRITON_TRACE_LAUNCH, TRITONPARSE_DUMP_SASS
     if enable_trace_launch:
         TRITON_TRACE_LAUNCH = True
-    if enable_sass_dump is not None:
+    if enable_sass_dump:
         TRITONPARSE_DUMP_SASS = enable_sass_dump
 
     init_basic(trace_folder)
