@@ -1161,11 +1161,7 @@ def init(
             It only works when enable_trace_launch/TRITON_TRACE_LAUNCH is True.
         enable_sass_dump (Optional[bool]): Whether to enable SASS dumping.
     """
-    global \
-        TRITON_TRACE_LAUNCH, \
-        TRITONPARSE_MORE_TENSOR_INFORMATION, \
-        TORCHINDUCTOR_RUN_JIT_POST_COMPILE_HOOK, \
-        TRITONPARSE_DUMP_SASS
+    global TRITON_TRACE_LAUNCH, TRITONPARSE_MORE_TENSOR_INFORMATION, TORCHINDUCTOR_RUN_JIT_POST_COMPILE_HOOK, TRITONPARSE_DUMP_SASS
     if enable_trace_launch:
         TRITON_TRACE_LAUNCH = True
         TORCHINDUCTOR_RUN_JIT_POST_COMPILE_HOOK = True

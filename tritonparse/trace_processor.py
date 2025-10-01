@@ -198,7 +198,7 @@ def parse_single_trace_content(trace_content: str) -> str:
 def parse_single_file(
     file_path: str,
     output_dir: str = None,
-    split_by_frame_id_and_compile_id: bool = True,
+    split_inductor_compilations: bool = True,
 ):
     """
     Process a single file, correctly group events by kernel, and extract mappings.
@@ -210,8 +210,9 @@ def parse_single_file(
     Args:
         file_path (str): The path to the file to be processed.
         output_dir (str, optional): Directory to save the output files.
-        split_by_frame_id_and_compile_id (bool, optional): Whether to split
-            output files by frame_id and compile_id. Defaults to True.
+        split_inductor_compilations (bool, optional): Whether to split
+            output files by frame_id, compile_id, attempt_id, and compiled_autograd_id.
+            Defaults to True. This rule follows tlparse's behavior.
     """
     kernels_by_hash = defaultdict(
         lambda: {"compilation": None, "launches": [], "output_file": None}
@@ -253,7 +254,9 @@ def parse_single_file(
                 if not kernel_hash:
                     continue
 
-                if split_by_frame_id_and_compile_id:
+                # Split inductor compilations into separate files
+                # This rule follows tlparse's behavior.
+                if split_inductor_compilations:
                     pt_info = payload.get("pt_info", {})
                     frame_id = pt_info.get("frame_id")
                     frame_compile_id = pt_info.get("frame_compile_id")

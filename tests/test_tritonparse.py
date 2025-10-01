@@ -18,17 +18,13 @@ from dataclasses import dataclass
 from typing import Any, Union
 
 import torch
-
 import triton  # @manual=//triton:triton
-
 import triton.language as tl  # @manual=//triton:triton
-
+import tritonparse.context_manager
 import tritonparse.structured_logging
-import tritonparse.tools.disasm
 import tritonparse.utils
 
 from triton.compiler import ASTSource, IRSource  # @manual=//triton:triton
-
 from triton.knobs import CompileTimes  # @manual=//triton:triton
 from tritonparse.common import is_fbcode
 from tritonparse.structured_logging import convert, extract_python_source_info
@@ -404,6 +400,163 @@ class TestTritonparseCUDA(unittest.TestCase):
                 shutil.rmtree(temp_dir)
                 print("✓ Cleaned up temporary directory")
             tritonparse.structured_logging.clear_logging_config()
+
+    @unittest.skipUnless(torch.cuda.is_available(), "CUDA not available")
+    def test_context_manager_with_split_compilations(self):
+        """Test TritonParseManager context manager with split_inductor_compilations parameter"""
+
+        # Define Triton kernel
+        @triton.jit
+        def add_kernel(
+            a_ptr,
+            b_ptr,
+            c_ptr,
+            n_elements,
+            BLOCK_SIZE: tl.constexpr,
+        ):
+            pid = tl.program_id(axis=0)
+            block_start = pid * BLOCK_SIZE
+            offsets = block_start + tl.arange(0, BLOCK_SIZE)
+            mask = offsets < n_elements
+
+            a = tl.load(a_ptr + offsets, mask=mask)
+            b = tl.load(b_ptr + offsets, mask=mask)
+            c = a + b
+            tl.store(c_ptr + offsets, c, mask=mask)
+
+        def tensor_add_triton(a, b):
+            n_elements = a.numel()
+            c = torch.empty_like(a)
+            BLOCK_SIZE = 1024
+            grid = (triton.cdiv(n_elements, BLOCK_SIZE),)
+            add_kernel[grid](a, b, c, n_elements, BLOCK_SIZE)
+            return c
+
+        # Simple function for torch.compile (triggers inductor compilation)
+        def simple_add(a, b):
+            return a + b
+
+        # Prepare test data
+        torch.manual_seed(0)
+        size = (512, 512)
+        a = torch.randn(size, device=self.cuda_device, dtype=torch.float32)
+        b = torch.randn(size, device=self.cuda_device, dtype=torch.float32)
+
+        # Create temp directories for output
+        temp_output_dir_split_true = tempfile.mkdtemp()
+        temp_output_dir_split_false = tempfile.mkdtemp()
+
+        # Test 1: split_inductor_compilations=True
+        print("\n=== Testing split_inductor_compilations=True ===")
+        with tritonparse.context_manager.TritonParseManager(
+            enable_trace_launch=True,
+            split_inductor_compilations=True,
+            out=temp_output_dir_split_true,
+        ) as manager:
+
+            # Run Triton kernel
+            c_triton = tensor_add_triton(a, b)
+            c_triton.sum()
+
+            # Run torch.compile to trigger inductor compilation
+            compiled_add = torch.compile(simple_add)
+            c_compiled = compiled_add(a, b)
+            c_compiled.sum()
+
+            torch.cuda.synchronize()
+
+            # Verify log files are generated
+            log_files = os.listdir(manager.dir_path)
+            assert len(log_files) > 0, "Log files should be generated"
+            print(f"Generated {len(log_files)} log file(s)")
+
+            temp_dir_path = manager.dir_path
+
+        # After exiting context manager, verify behavior
+        # Verify parsed output exists
+        assert os.path.exists(
+            temp_output_dir_split_true
+        ), "Parsed output directory should exist"
+        print(f"Parsed output directory: {temp_output_dir_split_true}")
+
+        # Verify temporary log directory is cleaned up
+        assert not os.path.exists(
+            temp_dir_path
+        ), "Temporary log directory should be cleaned up"
+        print("✓ Temporary log directory cleaned up")
+
+        # Check output files for split=True
+        output_files_split_true = sorted(os.listdir(temp_output_dir_split_true))
+        num_files_split_true = len(output_files_split_true)
+        print(f"Output files (split=True): {num_files_split_true} files")
+        print(f"  Files: {output_files_split_true}")
+
+        # Test 2: split_inductor_compilations=False
+        print("\n=== Testing split_inductor_compilations=False ===")
+        with tritonparse.context_manager.TritonParseManager(
+            enable_trace_launch=True,
+            split_inductor_compilations=False,
+            out=temp_output_dir_split_false,
+        ) as manager:
+            assert os.path.exists(manager.dir_path), "Temporary directory should exist"
+            print(f"Temporary directory created: {manager.dir_path}")
+
+            # Run the same operations
+            c_triton = tensor_add_triton(a, b)
+            c_triton.sum()
+            compiled_add = torch.compile(simple_add)
+            c_compiled = compiled_add(a, b)
+            c_compiled.sum()
+
+            torch.cuda.synchronize()
+
+            log_files = os.listdir(manager.dir_path)
+            assert len(log_files) > 0, "Log files should be generated"
+            print(f"Generated {len(log_files)} log file(s)")
+
+            temp_dir_path = manager.dir_path
+
+        # After exiting context manager, verify behavior
+        # Verify parsed output exists
+        assert os.path.exists(
+            temp_output_dir_split_false
+        ), "Parsed output directory should exist"
+        print(f"Parsed output directory: {temp_output_dir_split_false}")
+
+        # Verify temporary log directory is cleaned up
+        assert not os.path.exists(
+            temp_dir_path
+        ), "Temporary log directory should be cleaned up"
+        print("✓ Temporary log directory cleaned up")
+
+        # Check output files for split=False
+        output_files_split_false = sorted(os.listdir(temp_output_dir_split_false))
+        num_files_split_false = len(output_files_split_false)
+        print(f"Output files (split=False): {num_files_split_false} files")
+        print(f"  Files: {output_files_split_false}")
+
+        # Verify the key difference: split=False should have one fewer file
+        assert (
+            num_files_split_false == num_files_split_true - 1
+        ), f"split=False should have one fewer file (expected {num_files_split_true - 1}, got {num_files_split_false})"
+        print(
+            f"✓ Verified: split=False has {num_files_split_false} files, split=True has {num_files_split_true} files (difference: 1)"
+        )
+
+        # Clean up test outputs
+        try:
+            if should_keep_output():
+                print(
+                    f"\n✓ Preserving output directories (TEST_KEEP_OUTPUT=1):\n  split=True: {temp_output_dir_split_true}\n  split=False: {temp_output_dir_split_false}"
+                )
+            else:
+                if os.path.exists(temp_output_dir_split_true):
+                    shutil.rmtree(temp_output_dir_split_true)
+                if os.path.exists(temp_output_dir_split_false):
+                    shutil.rmtree(temp_output_dir_split_false)
+                print("✓ Cleaned up output directories")
+        except Exception as e:
+            print(f"Warning: Failed to clean up output directories: {e}")
 
     @unittest.skipUnless(torch.cuda.is_available(), "CUDA not available")
     def test_complex_kernels(self):
