@@ -745,7 +745,9 @@ class TestTritonparseCUDA(unittest.TestCase):
             f.write(kernel_src)
 
         # 3) Generate logs by running the kernel once
-        tritonparse.structured_logging.init(logs_dir, enable_trace_launch=True)
+        tritonparse.structured_logging.init(
+            logs_dir, enable_trace_launch=True, enable_more_tensor_information=True
+        )
         try:
             if kernel_dir not in _sys.path:
                 _sys.path.insert(0, kernel_dir)

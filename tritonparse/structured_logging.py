@@ -41,6 +41,12 @@ TRITONPARSE_KERNEL_ALLOWLIST = os.environ.get("TRITONPARSE_KERNEL_ALLOWLIST", No
 _KERNEL_ALLOWLIST_PATTERNS: Optional[List[str]] = None
 # Enable launch trace. WARNNING: it will overwrite launch_metadata function for each triton kernel.
 TRITON_TRACE_LAUNCH = os.getenv("TRITON_TRACE_LAUNCH", None) in ["1", "true", "True"]
+# Enable more tensor information collection in trace logs.
+TRITONPARSE_MORE_TENSOR_INFORMATION = os.getenv(
+    "TRITONPARSE_MORE_TENSOR_INFORMATION", None
+) in ["1", "true", "True"]
+
+
 # The flag to mark if launch is traced. It is used to avoid initilizing the launch hook twice.
 _trace_launch_enabled = False
 
@@ -252,6 +258,15 @@ def _log_torch_tensor_info(tensor_value):
     # Add data_ptr for memory tracking (optional)
     if hasattr(tensor_value, "data_ptr"):
         arg_info["data_ptr"] = hex(tensor_value.data_ptr())
+    if TRITONPARSE_MORE_TENSOR_INFORMATION:
+        try:
+            arg_info["min"] = tensor_value.min().item()
+            arg_info["max"] = tensor_value.max().item()
+            arg_info["mean"] = tensor_value.float().mean().item()
+            arg_info["std"] = tensor_value.float().std().item()
+        except (RuntimeError, ValueError, TypeError) as e:
+            log.error(f"Error computing additional tensor statistics: {e}")
+            arg_info["tensor_capture_error"] = str(e)
     return arg_info
 
 
@@ -1097,17 +1112,25 @@ def init_basic(trace_folder: Optional[str] = None):
     maybe_enable_trace_launch()
 
 
-def init(trace_folder: Optional[str] = None, enable_trace_launch: bool = False):
+def init(
+    trace_folder: Optional[str] = None,
+    enable_trace_launch: bool = False,
+    enable_more_tensor_information: bool = False,
+):
     """
     This function is a wrapper around init_basic() that also sets up the compilation listener.
 
     Args:
         trace_folder (Optional[str]): The folder to store the trace files.
         enable_trace_launch (bool): Whether to enable the trace launch hook.
+        enable_more_tensor_information (bool): Whether to enable more tensor information logging.
+            It only works when enable_trace_launch/TRITON_TRACE_LAUNCH is True.
     """
-    global TRITON_TRACE_LAUNCH
+    global TRITON_TRACE_LAUNCH, TRITONPARSE_MORE_TENSOR_INFORMATION
     if enable_trace_launch:
         TRITON_TRACE_LAUNCH = True
+    if enable_more_tensor_information:
+        TRITONPARSE_MORE_TENSOR_INFORMATION = True
 
     init_basic(trace_folder)
     from triton import knobs
