@@ -12,6 +12,16 @@ def path_to_nvdisasm():
     return knobs.nvidia.nvdisasm.path
 
 
+def is_nvdisasm_available():
+    try:
+        if path_to_nvdisasm():
+            return True
+        else:
+            return False
+    except RuntimeError:
+        return False
+
+
 def extract(file_path):
     """Extract SASS from CUBIN using nvdisasm.
 

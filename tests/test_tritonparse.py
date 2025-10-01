@@ -19,22 +19,20 @@ from typing import Any, Union
 
 import torch
 
-# @manual=//triton:triton
-import triton
+import triton  # @manual=//triton:triton
 
-# @manual=//triton:triton
-import triton.language as tl
+import triton.language as tl  # @manual=//triton:triton
 
 import tritonparse.structured_logging
+import tritonparse.tools.disasm
 import tritonparse.utils
 
-# @manual=//triton:triton
-from triton.compiler import ASTSource, IRSource
+from triton.compiler import ASTSource, IRSource  # @manual=//triton:triton
 
-# @manual=//triton:triton
-from triton.knobs import CompileTimes
+from triton.knobs import CompileTimes  # @manual=//triton:triton
 from tritonparse.common import is_fbcode
 from tritonparse.structured_logging import convert, extract_python_source_info
+from tritonparse.tools.disasm import is_nvdisasm_available
 
 HAS_TRITON_KERNELS = importlib.util.find_spec("triton_kernels") is not None
 
@@ -181,7 +179,7 @@ class TestTritonparseCUDA(unittest.TestCase):
 
     @unittest.skipUnless(torch.cuda.is_available(), "CUDA not available")
     def test_whole_workflow(self):
-        """Test unified_parse functionality"""
+        """Test unified_parse functionality including SASS extraction"""
 
         # Define a simple kernel directly in the test function
         @triton.jit
@@ -211,9 +209,18 @@ class TestTritonparseCUDA(unittest.TestCase):
         os.makedirs(temp_dir_logs, exist_ok=True)
         os.makedirs(temp_dir_parsed, exist_ok=True)
         print(f"Temporary directory: {temp_dir}")
+        nvdisasm_available = is_nvdisasm_available()
+        if nvdisasm_available:
+            print("✓ nvdisasm tool is available, enabling SASS dumping")
+        else:
+            print("⚠️  nvdisasm tool not available, SASS dumping will be disabled")
 
-        # Initialize logging
-        tritonparse.structured_logging.init(temp_dir_logs, enable_trace_launch=True)
+        # Initialize logging with conditional SASS dumping
+        tritonparse.structured_logging.init(
+            temp_dir_logs,
+            enable_trace_launch=True,
+            enable_sass_dump=nvdisasm_available,
+        )
 
         # Generate test data and run kernels
         torch.manual_seed(0)
@@ -237,8 +244,8 @@ class TestTritonparseCUDA(unittest.TestCase):
         print(f"Found {len(log_files)} log files in {temp_dir_logs}: {log_files}")
 
         def check_event_type_counts_in_logs(log_dir: str) -> dict:
-            """Count 'launch' and unique 'compilation' events in all log files"""
-            event_counts = {"launch": 0}
+            """Count 'launch' and unique 'compilation' events in all log files and verify SASS content"""
+            event_counts = {"launch": 0, "sass_found": False}
             # Track unique compilation hashes
             compilation_hashes = set()
 
@@ -267,6 +274,43 @@ class TestTritonparseCUDA(unittest.TestCase):
                                         print(
                                             f"  Line {line_num}: event_type = 'compilation' (unique hash: {compilation_hash[:8]}...)"
                                         )
+
+                                    # Check for SASS content in compilation events
+                                    file_content = event_data.get("payload", {}).get(
+                                        "file_content", {}
+                                    )
+                                    sass_files = [
+                                        key
+                                        for key in file_content.keys()
+                                        if key.endswith(".sass")
+                                    ]
+
+                                    if sass_files and not event_counts["sass_found"]:
+                                        event_counts["sass_found"] = True
+                                        sass_content = file_content[sass_files[0]]
+                                        print(f"✓ Found SASS file: {sass_files[0]}")
+                                        print(
+                                            f"  SASS content preview (first 200 chars): {sass_content[:200]}..."
+                                        )
+
+                                        # Verify SASS content looks like assembly
+                                        assert (
+                                            "Function:" in sass_content
+                                        ), "SASS content should contain function declaration"
+                                        # Basic check for NVIDIA GPU assembly patterns
+                                        assert any(
+                                            pattern in sass_content.lower()
+                                            for pattern in [
+                                                "mov",
+                                                "add",
+                                                "mul",
+                                                "ld",
+                                                "st",
+                                                "lop",
+                                                "s2r",
+                                            ]
+                                        ), "SASS content should contain GPU assembly instructions"
+
                             except (json.JSONDecodeError, KeyError, TypeError) as e:
                                 print(f"  Line {line_num}: Error processing line - {e}")
 
@@ -277,7 +321,7 @@ class TestTritonparseCUDA(unittest.TestCase):
             )
             return event_counts
 
-        # Verify event counts
+        # Verify event counts and conditional SASS extraction
         event_counts = check_event_type_counts_in_logs(temp_dir_logs)
         assert (
             event_counts["compilation"] == 1
@@ -285,6 +329,16 @@ class TestTritonparseCUDA(unittest.TestCase):
         assert (
             event_counts["launch"] == 2
         ), f"Expected 2 'launch' events, found {event_counts['launch']}"
+
+        # Conditionally verify SASS content based on nvdisasm availability
+        if nvdisasm_available:
+            assert event_counts[
+                "sass_found"
+            ], "SASS content was not found in compilation events"
+            print("✓ Successfully verified SASS extraction functionality")
+        else:
+            print("⚠️  SASS verification skipped: nvdisasm not available")
+
         print(
             "✓ Verified correct event type counts: 1 unique compilation hash, 2 launch events"
         )
@@ -297,6 +351,49 @@ class TestTritonparseCUDA(unittest.TestCase):
             # Verify parsing output
             parsed_files = os.listdir(temp_dir_parsed)
             assert len(parsed_files) > 0, "No files found in parsed output directory"
+
+            # Verify that SASS is preserved in parsed output
+            ndjson_gz_files = [f for f in parsed_files if f.endswith(".ndjson.gz")]
+            assert (
+                len(ndjson_gz_files) > 0
+            ), "No .ndjson.gz files found in parsed output"
+
+            sass_found_in_parsed = False
+            for ndjson_gz_file in ndjson_gz_files:
+                ndjson_gz_path = os.path.join(temp_dir_parsed, ndjson_gz_file)
+                with gzip.open(ndjson_gz_path, "rt", encoding="utf-8") as f:
+                    for line in f:
+                        try:
+                            event_data = json.loads(line.strip())
+                            if event_data.get("event_type") == "compilation":
+                                file_content = event_data.get("payload", {}).get(
+                                    "file_content", {}
+                                )
+                                sass_files = [
+                                    key
+                                    for key in file_content.keys()
+                                    if key.endswith(".sass")
+                                ]
+                                if sass_files:
+                                    sass_found_in_parsed = True
+                                    print("✓ SASS content preserved in parsed output")
+                                    break
+                        except json.JSONDecodeError:
+                            continue
+
+                if sass_found_in_parsed:
+                    break
+
+            # Conditionally verify SASS content is preserved in parsed output
+            if nvdisasm_available:
+                assert (
+                    sass_found_in_parsed
+                ), "SASS content was not preserved in parsed output"
+            else:
+                print(
+                    "⚠️  SASS preservation verification skipped: nvdisasm not available"
+                )
+
         finally:
             # Clean up
             if should_keep_output():
