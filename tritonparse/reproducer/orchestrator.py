@@ -55,15 +55,15 @@ def reproduce(
         "# {{KERNEL_INVOCATION_PLACEHOLDER}}", invocation_snippet
     )
     out_py_path.write_text(final_code, encoding="utf-8")
-    logger.info(
-        "REPRODUCER_OUTPUT script=%s json=%s kernel=%s",
-        str(out_py_path.resolve()),
-        str(temp_json_path.resolve()),
-        context_bundle.kernel_info.function_name,
-    )
 
-    return {
+    filepath = context_bundle.kernel_info.file_path
+    filepath = "/".join(filepath.split("/")[5:])
+    ret = {
+        "kernel_src_path": filepath,
         "kernel": context_bundle.kernel_info.function_name,
-        "script": str(out_py_path.resolve()),
-        "json": str(temp_json_path.resolve()),
+        "repo_script": str(out_py_path.resolve()),
+        "repo_context": str(temp_json_path.resolve()),
     }
+    logger.info("REPRODUCER_OUTPUT\n%s", ret)
+
+    return ret
