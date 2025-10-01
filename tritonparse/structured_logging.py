@@ -45,8 +45,12 @@ TRITON_TRACE_LAUNCH = os.getenv("TRITON_TRACE_LAUNCH", None) in ["1", "true", "T
 TRITONPARSE_MORE_TENSOR_INFORMATION = os.getenv(
     "TRITONPARSE_MORE_TENSOR_INFORMATION", None
 ) in ["1", "true", "True"]
-
-
+# Inductor compiled kernel's launch tracing needs this flag to be set.
+# If TRITON_TRACE_LAUNCH is enabled, also enable TORCHINDUCTOR_RUN_JIT_POST_COMPILE_HOOK
+TORCHINDUCTOR_RUN_JIT_POST_COMPILE_HOOK = (
+    os.getenv("TORCHINDUCTOR_RUN_JIT_POST_COMPILE_HOOK", None) in ["1", "true", "True"]
+    or TRITON_TRACE_LAUNCH
+)
 # The flag to mark if launch is traced. It is used to avoid initilizing the launch hook twice.
 _trace_launch_enabled = False
 
@@ -1126,9 +1130,13 @@ def init(
         enable_more_tensor_information (bool): Whether to enable more tensor information logging.
             It only works when enable_trace_launch/TRITON_TRACE_LAUNCH is True.
     """
-    global TRITON_TRACE_LAUNCH, TRITONPARSE_MORE_TENSOR_INFORMATION
+    global \
+        TRITON_TRACE_LAUNCH, \
+        TRITONPARSE_MORE_TENSOR_INFORMATION, \
+        TORCHINDUCTOR_RUN_JIT_POST_COMPILE_HOOK
     if enable_trace_launch:
         TRITON_TRACE_LAUNCH = True
+        TORCHINDUCTOR_RUN_JIT_POST_COMPILE_HOOK = True
     if enable_more_tensor_information:
         TRITONPARSE_MORE_TENSOR_INFORMATION = True
 
