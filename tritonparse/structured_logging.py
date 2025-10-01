@@ -10,6 +10,7 @@ import json
 import logging
 import math
 import os
+import subprocess
 from collections import defaultdict
 from collections.abc import Mapping
 from dataclasses import asdict, is_dataclass
@@ -51,6 +52,14 @@ TORCHINDUCTOR_RUN_JIT_POST_COMPILE_HOOK = (
     os.getenv("TORCHINDUCTOR_RUN_JIT_POST_COMPILE_HOOK", None) in ["1", "true", "True"]
     or TRITON_TRACE_LAUNCH
 )
+# Enable NVIDIA SASS dump. It requires the CUBIN file to be localable.
+# WARNNING: it will slow down the compilation significantly.
+TRITONPARSE_DUMP_SASS = os.getenv("TRITONPARSE_DUMP_SASS", None) in [
+    "1",
+    "true",
+    "True",
+]
+
 # The flag to mark if launch is traced. It is used to avoid initilizing the launch hook twice.
 _trace_launch_enabled = False
 
@@ -485,6 +494,26 @@ def extract_file_content(trace_data: Dict[str, Any], metadata_group: Dict[str, s
                 message = f"<error reading file: {str(e)}>"
                 trace_data["file_content"][ir_filename] = message
                 log.debug(f"Error reading file {file_path}: {e}")
+    cubin_keys = [key for key in metadata_group.keys() if key.endswith(".cubin")]
+    cubin_path = metadata_group[cubin_keys[0]] if cubin_keys else None
+
+    if TRITONPARSE_DUMP_SASS and cubin_path:
+        filename_no_ext = os.path.splitext(os.path.basename(cubin_path))[0]
+        sass_filename = f"{filename_no_ext}.sass"
+        try:
+            import tritonparse.tools.disasm
+
+            sass_content = tritonparse.tools.disasm.extract(cubin_path)
+            trace_data["file_content"][sass_filename] = sass_content
+        except subprocess.CalledProcessError as e:
+            message = f"<nvdisasm failed: {str(e)}>"
+            trace_data["file_content"][sass_filename] = message
+        except OSError as e:
+            message = f"<error reading cubin file: {str(e)}>"
+            trace_data["file_content"][sass_filename] = message
+        except Exception as e:
+            message = f"<error dumping SASS: {str(e)}>"
+            trace_data["file_content"][sass_filename] = message
 
 
 def extract_metadata_from_src(trace_data, src):
@@ -1087,7 +1116,7 @@ def init_basic(trace_folder: Optional[str] = None):
     """
     Initialize the basic logging system for Triton compilation.
 
-    This function sets up the basic logging system for Triton kernel compilation,
+    This function sets up the basic logging system for Triton kernel compilation.
 
     Args:
         trace_folder (Optional[str]): The folder to store the trace files.
@@ -1120,25 +1149,30 @@ def init(
     trace_folder: Optional[str] = None,
     enable_trace_launch: bool = False,
     enable_more_tensor_information: bool = False,
+    enable_sass_dump: Optional[bool] = False,
 ):
     """
-    This function is a wrapper around init_basic() that also sets up the compilation listener.
+    This function is a wrapper around init_basic() that also sets up the compilation listener. Its arguments have higher priority than the environment variables for same settings.
 
     Args:
         trace_folder (Optional[str]): The folder to store the trace files.
         enable_trace_launch (bool): Whether to enable the trace launch hook.
         enable_more_tensor_information (bool): Whether to enable more tensor information logging.
             It only works when enable_trace_launch/TRITON_TRACE_LAUNCH is True.
+        enable_sass_dump (Optional[bool]): Whether to enable SASS dumping.
     """
     global \
         TRITON_TRACE_LAUNCH, \
         TRITONPARSE_MORE_TENSOR_INFORMATION, \
-        TORCHINDUCTOR_RUN_JIT_POST_COMPILE_HOOK
+        TORCHINDUCTOR_RUN_JIT_POST_COMPILE_HOOK, \
+        TRITONPARSE_DUMP_SASS
     if enable_trace_launch:
         TRITON_TRACE_LAUNCH = True
         TORCHINDUCTOR_RUN_JIT_POST_COMPILE_HOOK = True
     if enable_more_tensor_information:
         TRITONPARSE_MORE_TENSOR_INFORMATION = True
+    if enable_sass_dump:
+        TRITONPARSE_DUMP_SASS = True
 
     init_basic(trace_folder)
     from triton import knobs
