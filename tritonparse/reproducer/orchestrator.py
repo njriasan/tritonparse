@@ -1,13 +1,9 @@
 from pathlib import Path
 
 from tritonparse.reproducer.ingestion.ndjson import build_context_bundle
+from tritonparse.reproducer.placeholder_replacer import DefaultPlaceholderReplacer
 from tritonparse.reproducer.templates.loader import load_template_code
-from tritonparse.reproducer.utils import (
-    _generate_import_statements,
-    _generate_invocation_snippet,
-    _parse_kernel_signature,
-    determine_output_paths,
-)
+from tritonparse.reproducer.utils import determine_output_paths
 
 from tritonparse.tools.prettify_ndjson import load_ndjson, save_prettified_json
 from tritonparse.tp_logger import logger
@@ -42,18 +38,13 @@ def reproduce(
     save_prettified_json(context_bundle.raw_launch_event, temp_json_path)
     logger.debug("Loading reproducer template.")
     template_code = load_template_code(template)
-    final_code = template_code.replace(
-        "{{JSON_FILE_NAME_PLACEHOLDER}}", temp_json_path.name
+
+    # Use PlaceholderReplacer to replace all placeholders
+    replacer = DefaultPlaceholderReplacer()
+    final_code = replacer.replace(
+        template_code, context_bundle, temp_json_path=temp_json_path
     )
-    sys_stmt, import_statement = _generate_import_statements(context_bundle.kernel_info)
-    final_code = final_code.replace("# {{KERNEL_SYSPATH_PLACEHOLDER}}", sys_stmt)
-    final_code = final_code.replace("# {{KERNEL_IMPORT_PLACEHOLDER}}", import_statement)
-    source_code = context_bundle.kernel_info.source_code
-    pos_args, kw_args = _parse_kernel_signature(source_code)
-    invocation_snippet = _generate_invocation_snippet(pos_args, kw_args)
-    final_code = final_code.replace(
-        "# {{KERNEL_INVOCATION_PLACEHOLDER}}", invocation_snippet
-    )
+
     out_py_path.write_text(final_code, encoding="utf-8")
 
     filepath = context_bundle.kernel_info.file_path
