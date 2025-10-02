@@ -22,6 +22,11 @@ const PARAM_WORD_LEVEL = "word_level";
 const PARAM_CONTEXT = "context";
 const PARAM_WRAP = "wrap";
 const PARAM_ONLY_CHANGED = "only_changed";
+const PARAM_SEMANTIC_MODE = "semantic_mode";
+const PARAM_IGNORE_REGISTERS = "ignore_registers";
+const PARAM_IGNORE_LABELS = "ignore_labels";
+const PARAM_IGNORE_BLOCK_NAMES = "ignore_block_names";
+const PARAM_IGNORE_LINE_NUMBERS = "ignore_line_numbers";
 
 function findKernelIndexByHash(hash: string | null, kernels: ProcessedKernel[]): number {
   if (!hash) return -1;
@@ -75,6 +80,13 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
   const [contextLines, setContextLines] = useState<number>(3);
   const [wordWrap, setWordWrap] = useState<"off" | "on">("on");
   const [onlyChanged, setOnlyChanged] = useState<boolean>(false);
+  
+  // Semantic diff options
+  const [semanticMode, setSemanticMode] = useState<boolean>(false);
+  const [ignoreRegisters, setIgnoreRegisters] = useState<boolean>(true);
+  const [ignoreLabels, setIgnoreLabels] = useState<boolean>(true);
+  const [ignoreBlockNames, setIgnoreBlockNames] = useState<boolean>(false);
+  const [ignoreLineNumbers, setIgnoreLineNumbers] = useState<boolean>(false);
 
   // Read URL on mount
   useEffect(() => {
@@ -109,6 +121,13 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
     const wrap = params.get(PARAM_WRAP);
     if (wrap === "on" || wrap === "off") setWordWrap(wrap);
     setOnlyChanged(params.get(PARAM_ONLY_CHANGED) === "1");
+    
+    // Semantic diff options
+    setSemanticMode(params.get(PARAM_SEMANTIC_MODE) === "1");
+    setIgnoreRegisters(params.get(PARAM_IGNORE_REGISTERS) !== "0");
+    setIgnoreLabels(params.get(PARAM_IGNORE_LABELS) !== "0");
+    setIgnoreBlockNames(params.get(PARAM_IGNORE_BLOCK_NAMES) === "1");
+    setIgnoreLineNumbers(params.get(PARAM_IGNORE_LINE_NUMBERS) === "1");
 
     // Left/Right kernel index by hash
     const leftHash = params.get(PARAM_KERNEL_HASH_A);
@@ -259,10 +278,16 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
     params.set(PARAM_CONTEXT, String(contextLines));
     params.set(PARAM_WRAP, wordWrap);
     params.set(PARAM_ONLY_CHANGED, onlyChanged ? "1" : "0");
+    // semantic diff options
+    params.set(PARAM_SEMANTIC_MODE, semanticMode ? "1" : "0");
+    params.set(PARAM_IGNORE_REGISTERS, ignoreRegisters ? "1" : "0");
+    params.set(PARAM_IGNORE_LABELS, ignoreLabels ? "1" : "0");
+    params.set(PARAM_IGNORE_BLOCK_NAMES, ignoreBlockNames ? "1" : "0");
+    params.set(PARAM_IGNORE_LINE_NUMBERS, ignoreLineNumbers ? "1" : "0");
     const newUrl = new URL(window.location.href);
     newUrl.search = params.toString();
     window.history.replaceState({}, "", newUrl.toString());
-  }, [kernelsLeft, kernelsRight, leftIdx, rightIdx, rightLoadedUrl, mode, irType, ignoreWs, wordLevel, contextLines, wordWrap, onlyChanged, leftLoadedFromLocal, leftLoadedUrlLocal, leftLoadedUrl, leftKernelsFromLocal, leftKernelsFromUrl]);
+  }, [kernelsLeft, kernelsRight, leftIdx, rightIdx, rightLoadedUrl, mode, irType, ignoreWs, wordLevel, contextLines, wordWrap, onlyChanged, semanticMode, ignoreRegisters, ignoreLabels, ignoreBlockNames, ignoreLineNumbers, leftLoadedFromLocal, leftLoadedUrlLocal, leftLoadedUrl, leftKernelsFromLocal, leftKernelsFromUrl]);
 
   // Debounce URL updates to reduce history churn
   useEffect(() => {
@@ -304,7 +329,7 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
         </div>
         {!hideDiff && (
           <DiffComparisonView
-            key={`single-${leftIdx}-${rightIdx}-${irType}`}
+            key={`single-${leftIdx}-${rightIdx}-${irType}-${semanticMode}`}
             leftContent={leftContent}
             rightContent={rightContent}
             height="calc(100vh - 14rem)"
@@ -315,6 +340,11 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
               context: contextLines,
               wordWrap,
               onlyChanged,
+              semanticMode,
+              ignoreRegisters,
+              ignoreLabels,
+              ignoreBlockNames,
+              ignoreLineNumbers,
             }}
           />
         )}
@@ -350,7 +380,7 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
                 <div className="px-2 pb-2">
                   {!hideDiff && (
                     <DiffComparisonView
-                      key={`all-${t}-${leftIdx}-${rightIdx}`}
+                      key={`all-${t}-${leftIdx}-${rightIdx}-${semanticMode}`}
                       leftContent={leftContent}
                       rightContent={rightContent}
                       height="calc(100vh - 14rem)"
@@ -361,6 +391,11 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
                         context: contextLines,
                         wordWrap,
                         onlyChanged,
+                        semanticMode,
+                        ignoreRegisters,
+                        ignoreLabels,
+                        ignoreBlockNames,
+                        ignoreLineNumbers,
                       }}
                     />
                   )}
@@ -632,6 +667,59 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
               </label>
             </div>
           </div>
+        </div>
+
+        {/* Semantic Diff Options */}
+        <div className="mt-3 p-3 bg-gray-50 rounded border border-gray-300">
+          <div className="flex items-center gap-3 mb-2">
+            <label className="inline-flex items-center gap-2 text-sm font-medium">
+              <input 
+                type="checkbox" 
+                checked={semanticMode} 
+                onChange={(e) => setSemanticMode(e.target.checked)}
+                className="w-4 h-4"
+              />
+              <span className="text-gray-800">Enable Semantic Diff Mode</span>
+            </label>
+            <span className="text-xs text-gray-500">(Custom rules to ignore certain differences)</span>
+          </div>
+          
+          {semanticMode && (
+            <div className="flex flex-wrap gap-3 pl-6">
+              <label className="inline-flex items-center gap-1 text-sm text-gray-700">
+                <input 
+                  type="checkbox" 
+                  checked={ignoreRegisters} 
+                  onChange={(e) => setIgnoreRegisters(e.target.checked)} 
+                />
+                Ignore registers
+              </label>
+              <label className="inline-flex items-center gap-1 text-sm text-gray-700">
+                <input 
+                  type="checkbox" 
+                  checked={ignoreLabels} 
+                  onChange={(e) => setIgnoreLabels(e.target.checked)} 
+                />
+                Ignore labels
+              </label>
+              <label className="inline-flex items-center gap-1 text-sm text-gray-700">
+                <input 
+                  type="checkbox" 
+                  checked={ignoreBlockNames} 
+                  onChange={(e) => setIgnoreBlockNames(e.target.checked)} 
+                />
+                Ignore block names
+              </label>
+              <label className="inline-flex items-center gap-1 text-sm text-gray-700">
+                <input 
+                  type="checkbox" 
+                  checked={ignoreLineNumbers} 
+                  onChange={(e) => setIgnoreLineNumbers(e.target.checked)} 
+                />
+                Ignore line numbers
+              </label>
+            </div>
+          )}
         </div>
       </div>
 

@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { DiffEditor } from "@monaco-editor/react";
+import SemanticDiffView from "./SemanticDiffView";
+import { NormalizationRules } from "../utils/diffNormalizers";
 
 interface DiffOptions {
   ignoreWhitespace?: boolean;
@@ -7,6 +9,12 @@ interface DiffOptions {
   context?: number; // lines of context when hiding unchanged regions
   wordWrap?: "off" | "on";
   onlyChanged?: boolean;
+  // Semantic diff mode
+  semanticMode?: boolean;
+  ignoreRegisters?: boolean;
+  ignoreLabels?: boolean;
+  ignoreBlockNames?: boolean;
+  ignoreLineNumbers?: boolean;
 }
 
 interface DiffComparisonViewProps {
@@ -24,6 +32,29 @@ const DiffComparisonView: React.FC<DiffComparisonViewProps> = ({
   height = "calc(100vh - 12rem)",
   options,
 }) => {
+  // If semantic mode is enabled, use SemanticDiffView
+  if (options?.semanticMode) {
+    const normalizationRules: NormalizationRules = {
+      ignoreRegisters: options.ignoreRegisters ?? false,
+      ignoreLabels: options.ignoreLabels ?? false,
+      ignoreBlockNames: options.ignoreBlockNames ?? false,
+      ignoreLineNumbers: options.ignoreLineNumbers ?? false,
+    };
+    
+    return (
+      <SemanticDiffView
+        leftContent={leftContent}
+        rightContent={rightContent}
+        language={language}
+        height={height}
+        normalizationRules={normalizationRules}
+        wordWrap={options.wordWrap}
+        wordLevel={options.wordLevel}
+      />
+    );
+  }
+
+  // Otherwise use Monaco DiffEditor (default)
   const monacoOptions = useMemo(() => {
     const hideUnchanged = options?.onlyChanged
       ? {
