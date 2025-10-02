@@ -2,26 +2,57 @@
 #  Copyright (c) Meta Platforms, Inc. and affiliates.
 
 import argparse
+from importlib.metadata import PackageNotFoundError, version
 
-from tritonparse.reproducer.cli import _add_reproducer_args
-from tritonparse.reproducer.orchestrator import reproduce
+from .reproducer.cli import _add_reproducer_args
+from .reproducer.orchestrator import reproduce
+from .utils import _add_parse_args, unified_parse
 
-from tritonparse.utils import _add_parse_args, unified_parse
+
+def _get_package_version() -> str:
+    try:
+        return version("tritonparse")
+    except PackageNotFoundError:
+        return "0+unknown"
 
 
-# We need this as an entrace for fbpkg
 def main():
-    parser = argparse.ArgumentParser(description="tritonparse CLI")
+    pkg_version = _get_package_version()
+
+    parser = argparse.ArgumentParser(
+        prog="tritonparse",
+        description=(
+            "TritonParse: parse structured logs and generate minimal reproducers"
+        ),
+        epilog=(
+            "Examples:\n"
+            "  tritonparse parse /path/to/logs --out parsed_output\n"
+            "  tritonparse reproduce /path/to/trace.ndjson --line 1 --out-dir repro_output\n"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {pkg_version}",
+        help="Show program's version number and exit",
+    )
+
     subparsers = parser.add_subparsers(dest="command", required=True)
 
+    # parse subcommand
     parse_parser = subparsers.add_parser(
-        "parse", help="Parse triton structured logs", conflict_handler="resolve"
+        "parse",
+        help="Parse triton structured logs",
+        conflict_handler="resolve",
     )
     _add_parse_args(parse_parser)
     parse_parser.set_defaults(func="parse")
 
+    # reproduce subcommand
     repro_parser = subparsers.add_parser(
-        "reproduce", help="Build reproducer from trace file"
+        "reproduce",
+        help="Build reproducer from trace file",
     )
     _add_reproducer_args(repro_parser)
     repro_parser.set_defaults(func="reproduce")
@@ -29,7 +60,6 @@ def main():
     args = parser.parse_args()
 
     if args.func == "parse":
-        # Filter out routing-specific arguments before passing to unified_parse
         parse_args = {
             k: v for k, v in vars(args).items() if k not in ["command", "func"]
         }
@@ -37,10 +67,12 @@ def main():
     elif args.func == "reproduce":
         reproduce(
             input_path=args.input,
-            line_index=args.line_index,
+            line_index=args.line,
             out_dir=args.out_dir,
             template=args.template,
         )
+    else:
+        raise RuntimeError(f"Unknown command: {args.func}")
 
 
 if __name__ == "__main__":
