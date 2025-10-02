@@ -1,7 +1,11 @@
 from pathlib import Path
+from typing import Optional
 
 from tritonparse.reproducer.ingestion.ndjson import build_context_bundle
-from tritonparse.reproducer.placeholder_replacer import DefaultPlaceholderReplacer
+from tritonparse.reproducer.placeholder_replacer import (
+    DefaultPlaceholderReplacer,
+    PlaceholderReplacer,
+)
 from tritonparse.reproducer.templates.loader import load_template_code
 from tritonparse.reproducer.utils import determine_output_paths
 
@@ -14,6 +18,7 @@ def reproduce(
     line_index: int,
     out_dir: str,
     template: str,
+    replacer: Optional[PlaceholderReplacer] = None,
 ) -> dict[str, Path]:
     """
     Generate a reproducer script from NDJSON trace file.
@@ -22,6 +27,8 @@ def reproduce(
         input_path: Path to the NDJSON trace file.
         line_index: Line index of the launch event to reproduce.
         out_dir: Output directory for reproducer files.
+        template: Template name to use for the reproducer.
+        replacer: Optional custom PlaceholderReplacer instance. If None, uses DefaultPlaceholderReplacer.
     """
     logger.debug(f"Building bundle from {input_path} at line {line_index}")
     events = load_ndjson(Path(input_path))
@@ -40,7 +47,9 @@ def reproduce(
     template_code = load_template_code(template)
 
     # Use PlaceholderReplacer to replace all placeholders
-    replacer = DefaultPlaceholderReplacer()
+    # If no custom replacer provided, use the default one
+    if replacer is None:
+        replacer = DefaultPlaceholderReplacer()
     final_code = replacer.replace(
         template_code, context_bundle, temp_json_path=temp_json_path
     )
