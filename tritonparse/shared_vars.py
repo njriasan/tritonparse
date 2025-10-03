@@ -7,3 +7,5 @@ DEFAULT_TRACE_FILE_PREFIX = (
     f"dedicated_log_triton_trace_{os.getenv('USER', 'unknown')}_"
 )
 DEFAULT_TRACE_FILE_PREFIX_WITHOUT_USER = "dedicated_log_triton_trace_"
+# Return True if test outputs (e.g., temp dirs) should be preserved.
+TEST_KEEP_OUTPUT = os.getenv("TEST_KEEP_OUTPUT", "0") in ["1", "true", "True"]

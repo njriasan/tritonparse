@@ -18,31 +18,126 @@ from dataclasses import dataclass
 from typing import Any, Union
 
 import torch
-
+import torch._inductor.config as inductor_config
 import triton  # @manual=//triton:triton
-
 import triton.language as tl  # @manual=//triton:triton
-
+import tritonparse.context_manager
 import tritonparse.structured_logging
-import tritonparse.tools.disasm
 import tritonparse.utils
+from triton import knobs  # @manual=//triton:triton
 
 from triton.compiler import ASTSource, IRSource  # @manual=//triton:triton
-
 from triton.knobs import CompileTimes  # @manual=//triton:triton
 from tritonparse.common import is_fbcode
+from tritonparse.shared_vars import TEST_KEEP_OUTPUT
 from tritonparse.structured_logging import convert, extract_python_source_info
 from tritonparse.tools.disasm import is_nvdisasm_available
 
 HAS_TRITON_KERNELS = importlib.util.find_spec("triton_kernels") is not None
 
 
-def should_keep_output() -> bool:
-    """Return True if test outputs (e.g., temp dirs) should be preserved.
+def create_fresh_triton_cache():
+    """Create a fresh Triton cache directory and return cache management context"""
+    cache_dir = tempfile.mkdtemp(prefix="triton_cache_")
+    return cache_dir, knobs.cache.scope()
 
-    Controlled by environment variable TEST_KEEP_OUTPUT=1.
+
+def setup_fresh_triton_environment(cache_dir):
+    """Setup fresh Triton environment with isolated cache"""
+    # Set up isolated cache directory
+    original_cache_dir = getattr(knobs.cache, "dir", None)
+    knobs.cache.dir = cache_dir
+
+    # Save and reset compilation settings
+    original_always_compile = knobs.compilation.always_compile
+    knobs.compilation.always_compile = True
+
+    # Reset hooks to clean state
+    original_jit_cache_hook = knobs.runtime.jit_cache_hook
+    original_jit_post_compile_hook = knobs.runtime.jit_post_compile_hook
+    original_launch_enter_hook = knobs.runtime.launch_enter_hook
+    original_compilation_listener = knobs.compilation.listener
+
+    knobs.runtime.jit_cache_hook = None
+    knobs.runtime.jit_post_compile_hook = None
+    knobs.runtime.launch_enter_hook = None
+    knobs.compilation.listener = None
+
+    return {
+        "original_cache_dir": original_cache_dir,
+        "original_always_compile": original_always_compile,
+        "original_jit_cache_hook": original_jit_cache_hook,
+        "original_jit_post_compile_hook": original_jit_post_compile_hook,
+        "original_launch_enter_hook": original_launch_enter_hook,
+        "original_compilation_listener": original_compilation_listener,
+    }
+
+
+def restore_triton_environment(original_settings):
+    """Restore original Triton environment settings"""
+    if original_settings["original_cache_dir"] is not None:
+        knobs.cache.dir = original_settings["original_cache_dir"]
+
+    knobs.compilation.always_compile = original_settings["original_always_compile"]
+    knobs.runtime.jit_cache_hook = original_settings["original_jit_cache_hook"]
+    knobs.runtime.jit_post_compile_hook = original_settings[
+        "original_jit_post_compile_hook"
+    ]
+    knobs.runtime.launch_enter_hook = original_settings["original_launch_enter_hook"]
+    knobs.compilation.listener = original_settings["original_compilation_listener"]
+
+
+def clear_all_caches(*kernels):
     """
-    return os.environ.get("TEST_KEEP_OUTPUT") == "1"
+    Clear all compilation caches comprehensively.
+
+    Args:
+        *kernels: Triton kernel objects to clear device caches for.
+                 Can pass multiple kernels or none at all.
+
+    This function performs a comprehensive cache clearing operation:
+    1. Resets PyTorch compiler state (torch.compiler, dynamo, inductor)
+    2. Clears Triton kernel device caches and resets hashes for provided kernels
+    3. Creates a new Triton cache directory
+
+    Returns:
+        tuple: (new_cache_dir, original_cache_dir) for cleanup purposes
+    """
+    print("\n=== Clearing all caches ===")
+
+    # Reset torch compiler state
+    torch.compiler.reset()
+    torch._dynamo.reset()
+    torch._inductor.metrics.reset()
+    print("✓ Reset torch compiler, dynamo, and inductor state")
+
+    # Clear Triton kernel device caches for all provided kernels
+    kernels_cleared = 0
+    for kernel in kernels:
+        if hasattr(kernel, "device_caches"):
+            for device_id in kernel.device_caches:
+                # device_caches[device_id] is a tuple of cache objects
+                device_cache_tuple = kernel.device_caches[device_id]
+                for cache_obj in device_cache_tuple:
+                    if hasattr(cache_obj, "clear"):
+                        cache_obj.clear()
+            kernel.hash = None  # Reset kernel hash to force recompilation
+            kernels_cleared += 1
+
+    if kernels_cleared > 0:
+        print(
+            f"✓ Cleared device caches and reset hashes for {kernels_cleared} kernel(s)"
+        )
+    else:
+        print("✓ No kernels provided for device cache clearing")
+
+    # Create a completely fresh cache directory
+    new_cache_dir = tempfile.mkdtemp(prefix="triton_fresh_cache_")
+    original_cache_dir = knobs.cache.dir
+    knobs.cache.dir = new_cache_dir
+    print(f"✓ Created fresh Triton cache directory: {new_cache_dir}")
+
+    return new_cache_dir, original_cache_dir
 
 
 class TestTritonparseCPU(unittest.TestCase):
@@ -108,22 +203,53 @@ class TestTritonparseCUDA(unittest.TestCase):
 
         self.cuda_device = torch.device("cuda:0")
 
-        # Save original settings
-        self.prev_listener = triton.knobs.compilation.listener
-        self.prev_always_compile = triton.knobs.compilation.always_compile
-        self.prev_jit_post_compile_hook = triton.knobs.runtime.jit_post_compile_hook
-        self.prev_launch_enter_hook = triton.knobs.runtime.launch_enter_hook
+        # Set up fresh Triton cache environment
+        self.triton_cache_dir, self.cache_scope = create_fresh_triton_cache()
+        self.cache_scope.__enter__()  # Enter the cache scope context
+        self.original_triton_settings = setup_fresh_triton_environment(
+            self.triton_cache_dir
+        )
 
-        # Set up new settings
-        triton.knobs.compilation.always_compile = True
+        # Save original settings for restoration
+        self.prev_listener = knobs.compilation.listener
+        self.prev_always_compile = knobs.compilation.always_compile
+        self.prev_jit_post_compile_hook = knobs.runtime.jit_post_compile_hook
+        self.prev_launch_enter_hook = knobs.runtime.launch_enter_hook
 
     def tearDown(self):
         """Restore original triton settings"""
         # Always restore original settings, even if test fails
-        triton.knobs.compilation.always_compile = self.prev_always_compile
-        triton.knobs.compilation.listener = self.prev_listener
-        triton.knobs.runtime.jit_post_compile_hook = self.prev_jit_post_compile_hook
-        triton.knobs.runtime.launch_enter_hook = self.prev_launch_enter_hook
+        try:
+            # Restore Triton environment
+            restore_triton_environment(self.original_triton_settings)
+
+            # Exit cache scope and cleanup
+            self.cache_scope.__exit__(None, None, None)
+            if os.path.exists(self.triton_cache_dir):
+                shutil.rmtree(self.triton_cache_dir, ignore_errors=True)
+
+        except Exception as e:
+            print(f"Warning: Failed to cleanup Triton environment: {e}")
+
+    def setup_test_with_fresh_cache(self):
+        """Setup individual test with completely fresh cache"""
+        # Create a new cache directory for this specific test
+        test_cache_dir = tempfile.mkdtemp(prefix="triton_test_cache_")
+
+        # Save current cache dir and set new one
+        prev_cache_dir = knobs.cache.dir
+        knobs.cache.dir = test_cache_dir
+
+        return test_cache_dir, prev_cache_dir
+
+    def cleanup_test_cache(self, test_cache_dir, prev_cache_dir):
+        """Cleanup test-specific cache"""
+        # Restore previous cache dir
+        knobs.cache.dir = prev_cache_dir
+
+        # Cleanup test cache directory
+        if os.path.exists(test_cache_dir):
+            shutil.rmtree(test_cache_dir, ignore_errors=True)
 
     @unittest.skipUnless(torch.cuda.is_available(), "CUDA not available")
     def test_extract_python_source_info(self):
@@ -396,7 +522,7 @@ class TestTritonparseCUDA(unittest.TestCase):
 
         finally:
             # Clean up
-            if should_keep_output():
+            if TEST_KEEP_OUTPUT:
                 print(
                     f"✓ Preserving temporary directory (TEST_KEEP_OUTPUT=1): {temp_dir}"
                 )
@@ -404,6 +530,220 @@ class TestTritonparseCUDA(unittest.TestCase):
                 shutil.rmtree(temp_dir)
                 print("✓ Cleaned up temporary directory")
             tritonparse.structured_logging.clear_logging_config()
+
+    @unittest.skipUnless(torch.cuda.is_available(), "CUDA not available")
+    def test_context_manager_with_split_compilations(self):
+        """Test TritonParseManager context manager with split_inductor_compilations parameter"""
+
+        # Setup fresh cache for this test (on top of the class-level fresh cache)
+        test_cache_dir, prev_cache_dir = self.setup_test_with_fresh_cache()
+
+        # Define Triton kernel
+        @triton.jit
+        def add_kernel(
+            a_ptr,
+            b_ptr,
+            c_ptr,
+            n_elements,
+            BLOCK_SIZE: tl.constexpr,
+        ):
+            pid = tl.program_id(axis=0)
+            block_start = pid * BLOCK_SIZE
+            offsets = block_start + tl.arange(0, BLOCK_SIZE)
+            mask = offsets < n_elements
+
+            a = tl.load(a_ptr + offsets, mask=mask)
+            b = tl.load(b_ptr + offsets, mask=mask)
+            c = a + b
+            tl.store(c_ptr + offsets, c, mask=mask)
+
+        def tensor_add_triton(a, b):
+            n_elements = a.numel()
+            c = torch.empty_like(a)
+            BLOCK_SIZE = 1024
+            grid = (triton.cdiv(n_elements, BLOCK_SIZE),)
+            add_kernel[grid](a, b, c, n_elements, BLOCK_SIZE)
+            return c
+
+        # Simple function for torch.compile (triggers inductor compilation)
+        def simple_add(a, b):
+            return a + b
+
+        # Prepare test data
+        torch.manual_seed(0)
+        size = (512, 512)
+        a = torch.randn(size, device=self.cuda_device, dtype=torch.float32)
+        b = torch.randn(size, device=self.cuda_device, dtype=torch.float32)
+
+        # Create temp directories for output
+        temp_output_dir_split_true = tempfile.mkdtemp()
+        temp_output_dir_split_false = tempfile.mkdtemp()
+
+        # Test 1: split_inductor_compilations=True
+        print("\n=== Testing split_inductor_compilations=True ===")
+        with tritonparse.context_manager.TritonParseManager(
+            enable_trace_launch=True,
+            split_inductor_compilations=True,
+            out=temp_output_dir_split_true,
+        ) as manager:
+            assert os.path.exists(manager.dir_path), "Temporary directory should exist"
+            print(f"Temporary directory created: {manager.dir_path}")
+
+            # Run Triton kernel
+            c_triton = tensor_add_triton(a, b)
+            c_triton.sum()
+            torch.compiler.reset()
+            with inductor_config.patch(force_disable_caches=True):
+                # Run torch.compile to trigger inductor compilation
+                compiled_add = torch.compile(simple_add)
+                c_compiled = compiled_add(a, b)
+                c_compiled.sum()
+
+            torch.cuda.synchronize()
+
+            # Verify log files are generated
+            log_files = os.listdir(manager.dir_path)
+            assert len(log_files) > 0, "Log files should be generated"
+            print(f"Generated {len(log_files)} log file(s)")
+        # After exiting context manager, verify behavior
+        # Verify parsed output exists
+        assert os.path.exists(
+            temp_output_dir_split_true
+        ), "Parsed output directory should exist"
+        print(f"Parsed output directory: {temp_output_dir_split_true}")
+
+        # Check output files for split=True
+        output_files_split_true = sorted(os.listdir(temp_output_dir_split_true))
+        num_files_split_true = len(output_files_split_true)
+        print(f"Output files (split=True): {num_files_split_true} files")
+        print(f"  Files: {output_files_split_true}")
+
+        # === Clear caches between tests ===
+        second_test_cache_dir, original_cache_dir = clear_all_caches(add_kernel)
+
+        # Test 2: split_inductor_compilations=False
+        print("\n=== Testing split_inductor_compilations=False ===")
+        with tritonparse.context_manager.TritonParseManager(
+            enable_trace_launch=True,
+            split_inductor_compilations=False,
+            out=temp_output_dir_split_false,
+        ) as manager:
+            assert os.path.exists(manager.dir_path), "Temporary directory should exist"
+            print(f"Temporary directory created: {manager.dir_path}")
+
+            # Run the same operations
+            c_triton = tensor_add_triton(a, b)
+            c_triton.sum()
+            torch.compiler.reset()
+            with inductor_config.patch(force_disable_caches=True):
+                compiled_add = torch.compile(simple_add)
+                c_compiled = compiled_add(a, b)
+                c_compiled.sum()
+
+            torch.cuda.synchronize()
+
+            log_files = os.listdir(manager.dir_path)
+            assert len(log_files) > 0, "Log files should be generated"
+            print(f"Generated {len(log_files)} log file(s)")
+        # After exiting context manager, verify behavior
+        # Verify parsed output exists
+        assert os.path.exists(
+            temp_output_dir_split_false
+        ), "Parsed output directory should exist"
+        print(f"Parsed output directory: {temp_output_dir_split_false}")
+
+        # Check output files for split=False
+        output_files_split_false = sorted(os.listdir(temp_output_dir_split_false))
+        num_files_split_false = len(output_files_split_false)
+        print(f"Output files (split=False): {num_files_split_false} files")
+        print(f"  Files: {output_files_split_false}")
+
+        # Check compilation events in parsed output for split=False
+        ndjson_gz_files_split_false = [
+            f for f in output_files_split_false if f.endswith(".ndjson.gz")
+        ]
+        assert (
+            len(ndjson_gz_files_split_false) > 0
+        ), "No .ndjson.gz files found in split=False parsed output"
+
+        compilation_count_split_false = 0
+        compilation_names_found = []
+        expected_compilation_names = {"add_kernel", "triton_poi_fused_add_0"}
+
+        for ndjson_gz_file in ndjson_gz_files_split_false:
+            ndjson_gz_path = os.path.join(temp_output_dir_split_false, ndjson_gz_file)
+            with gzip.open(ndjson_gz_path, "rt", encoding="utf-8") as f:
+                for line in f:
+                    try:
+                        event_data = json.loads(line.strip())
+                        if event_data.get("event_type") == "compilation":
+                            compilation_count_split_false += 1
+
+                            # Extract and validate the compilation name
+                            compilation_name = (
+                                event_data.get("payload", {})
+                                .get("metadata", {})
+                                .get("name")
+                            )
+                            if compilation_name:
+                                compilation_names_found.append(compilation_name)
+                                assert compilation_name in expected_compilation_names, (
+                                    f"Unexpected compilation name: '{compilation_name}'. "
+                                    f"Expected one of: {expected_compilation_names}"
+                                )
+                    except json.JSONDecodeError:
+                        continue
+
+        print(
+            f"Compilation events found (split=False): {compilation_count_split_false}"
+        )
+        print(f"Compilation names found: {compilation_names_found}")
+
+        assert (
+            compilation_count_split_false > 0
+        ), "Expected at least 1 compilation event in split=False output"
+
+        # Verify all compilation names are from the expected set
+        unique_names_found = set(compilation_names_found)
+        assert unique_names_found.issubset(expected_compilation_names), (
+            f"Found unexpected compilation names: {unique_names_found - expected_compilation_names}. "
+            f"Expected only: {expected_compilation_names}"
+        )
+        print(f"✓ All compilation names are valid: {unique_names_found}")
+
+        # Verify the key difference: split=False should have one fewer file
+        assert (
+            num_files_split_false == num_files_split_true - 1
+        ), f"split=False should have one fewer file (expected {num_files_split_true - 1}, got {num_files_split_false})"
+        print(
+            f"✓ Verified: split=False has {num_files_split_false} files, split=True has {num_files_split_true} files (difference: 1)"
+        )
+
+        # Clean up test outputs
+        try:
+            if TEST_KEEP_OUTPUT:
+                print(
+                    f"\n✓ Preserving output directories (TEST_KEEP_OUTPUT=1):\n  split=True: {temp_output_dir_split_true}\n  split=False: {temp_output_dir_split_false}"
+                )
+            else:
+                if os.path.exists(temp_output_dir_split_true):
+                    shutil.rmtree(temp_output_dir_split_true)
+                if os.path.exists(temp_output_dir_split_false):
+                    shutil.rmtree(temp_output_dir_split_false)
+                print("✓ Cleaned up output directories")
+        except Exception as e:
+            print(f"Warning: Failed to clean up output directories: {e}")
+
+        finally:
+            # Cleanup test-specific caches
+            self.cleanup_test_cache(test_cache_dir, prev_cache_dir)
+
+            # Cleanup second test cache directory
+            if "second_test_cache_dir" in locals():
+                knobs.cache.dir = original_cache_dir  # Restore cache dir first
+                if os.path.exists(second_test_cache_dir):
+                    shutil.rmtree(second_test_cache_dir, ignore_errors=True)
+                    print(f"✓ Cleaned up second test cache: {second_test_cache_dir}")
 
     @unittest.skipUnless(torch.cuda.is_available(), "CUDA not available")
     def test_complex_kernels(self):
@@ -702,7 +1042,7 @@ class TestTritonparseCUDA(unittest.TestCase):
 
         finally:
             # Clean up
-            if should_keep_output():
+            if TEST_KEEP_OUTPUT:
                 print(
                     f"✓ Preserving temporary directory (TEST_KEEP_OUTPUT=1): {temp_dir}"
                 )
@@ -795,7 +1135,7 @@ class TestTritonparseCUDA(unittest.TestCase):
 
         finally:
             # Clean up
-            if should_keep_output():
+            if TEST_KEEP_OUTPUT:
                 print(
                     f"✓ Preserving temporary directory (TEST_KEEP_OUTPUT=1): {temp_dir}"
                 )
@@ -916,7 +1256,7 @@ class TestTritonparseCUDA(unittest.TestCase):
         self.assertIn("Kernel execution finished.", proc.stdout)
 
         # Cleanup
-        if should_keep_output():
+        if TEST_KEEP_OUTPUT:
             print(f"✓ Preserving temporary directory (TEST_KEEP_OUTPUT=1): {temp_dir}")
         else:
             shutil.rmtree(temp_dir)
