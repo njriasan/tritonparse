@@ -262,6 +262,7 @@ def parse_logs(
     rank_config: RankConfig,
     verbose: bool = False,
     tritonparse_url_prefix: str = "",
+    split_inductor_compilations: bool = True,
 ) -> Tuple[str, dict]:
     """
     Parse logs.
@@ -271,7 +272,9 @@ def parse_logs(
         rank_config: Rank configuration
         verbose: Whether to print verbose information
         tritonparse_url_prefix: URL prefix for the generated file mapping
-
+        split_inductor_compilations: Whether to split
+            output files by frame_id, compile_id, attempt_id, and compiled_autograd_id.
+            Defaults to True. This rule follows tlparse's behavior.
     Returns:
         Tuple of (parsed log directory, file mapping)
     """
@@ -327,7 +330,7 @@ def parse_logs(
                 relative_path = rank.to_string("")
             output_dir = os.path.join(parsed_log_dir, relative_path)
             # Parse the file
-            parse_single_file(input_file, output_dir)
+            parse_single_file(input_file, output_dir, split_inductor_compilations)
             # Collect generated files after parsing and gzip them immediately
             if os.path.exists(output_dir):
                 generated_files = []

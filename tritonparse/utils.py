@@ -59,6 +59,7 @@ def oss_run(
     rank: Optional[int] = None,
     all_ranks: bool = False,
     verbose: bool = False,
+    split_inductor_compilations: bool = True,
 ):
     """
     Main function for tritonparse. It is for OSS only.
@@ -97,7 +98,9 @@ def oss_run(
         # Copy the single file to a temp directory, then parse it
         logs = copy_local_to_tmpdir(local_path, verbose)
 
-    parsed_log_dir, _ = parse_logs(logs, rank_config, verbose)
+    parsed_log_dir, _ = parse_logs(
+        logs, rank_config, verbose, split_inductor_compilations
+    )
     if out is not None:
         save_logs(Path(out), parsed_log_dir, overwrite, verbose)
     # Print beautiful summary of all parsed files
@@ -116,6 +119,7 @@ def unified_parse(
     rank: Optional[int] = None,
     all_ranks: bool = False,
     verbose: bool = False,
+    split_inductor_compilations: bool = True,
     **kwargs,
 ):
     """
@@ -142,6 +146,7 @@ def unified_parse(
         rank=rank,
         all_ranks=all_ranks,
         verbose=verbose,
+        split_inductor_compilations=split_inductor_compilations,
         **kwargs,
     )
     return output
