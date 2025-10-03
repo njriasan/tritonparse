@@ -143,7 +143,10 @@ def _create_arg_from_info(arg_info):
     """
     arg_type = arg_info.get("type")
 
-    if arg_type in ["int", "bool"]:
+    if arg_type == "NoneType":
+        return None
+
+    if arg_type in ["int", "bool", "str", "float"]:
         return arg_info.get("value")
 
     elif arg_type == "tensor":
