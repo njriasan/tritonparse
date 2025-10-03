@@ -343,7 +343,8 @@ const KernelOverview: React.FC<KernelOverviewProps> = ({
                     ([key]) =>
                       key !== "compilation_metadata" &&
                       key !== "extracted_args" &&
-                      key !== "event_type"
+                      key !== "event_type" &&
+                      key !== "stack"
                   )
                 );
 
@@ -373,6 +374,35 @@ const KernelOverview: React.FC<KernelOverviewProps> = ({
                 }
                 return null;
               })()}
+
+              {/* Unchanged Stack Trace */}
+              {kernel.launchDiff.sames && kernel.launchDiff.sames.stack && (
+                <div className="mb-4">
+                  <h4 className="text-md font-semibold mb-2 text-gray-800">
+                    Unchanged Stack Trace
+                  </h4>
+                  <div className="bg-white p-3 rounded-md border border-gray-200 overflow-auto resize-y h-80 min-h-24">
+                    {Array.isArray(kernel.launchDiff.sames.stack) ? (
+                      kernel.launchDiff.sames.stack.map((entry: any, index: number) => (
+                        <div key={index} className="mb-1 font-mono text-sm">
+                          <span className="text-blue-600">
+                            {getSourceFilePath(entry)}
+                          </span>
+                          :<span className="text-red-600">{entry.line}</span> -
+                          <span className="text-green-600">{entry.name}</span> -
+                          <span className="text-gray-700">{entry.loc}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <pre className="font-mono text-sm text-gray-700 whitespace-pre-wrap break-all">
+                        {typeof kernel.launchDiff.sames.stack === 'string' 
+                          ? kernel.launchDiff.sames.stack 
+                          : JSON.stringify(kernel.launchDiff.sames.stack, null, 2)}
+                      </pre>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Differing Fields */}
               <div className="mb-4">
