@@ -88,7 +88,13 @@ def load_tensor(tensor_file_path: str, device: str = None) -> torch.Tensor:
         raise RuntimeError(f"Failed to load tensor from {blob_path}: {str(e)}") from e
 
 
-def create_args_from_json(json_path):
+def create_args_from_json_file(json_path):
+    with open(json_path, "r") as f:
+        data = json.load(f)
+    return create_args_from_json(data)
+
+
+def create_args_from_json(data):
     """
     Parse a reproducer JSON and build kernel grid and argument dictionary.
 
@@ -98,8 +104,6 @@ def create_args_from_json(json_path):
     Returns:
         tuple[list, dict]: Grid specification list and map of argument name to value.
     """
-    with open(json_path, "r") as f:
-        data = json.load(f)
     # Handle data format validation and extraction
     if isinstance(data, list):
         if len(data) != 1:
@@ -300,7 +304,7 @@ def _create_arg_from_info(arg_info):
 if __name__ == "__main__":
     script_dir = Path(__file__).resolve().parent
     json_file = script_dir / "{{JSON_FILE_NAME_PLACEHOLDER}}"
-    grid, args_dict = create_args_from_json(str(json_file))
+    grid, args_dict = create_args_from_json_file(str(json_file))
 
     print("Generated kernel arguments dictionary:")
     for name, arg in args_dict.items():

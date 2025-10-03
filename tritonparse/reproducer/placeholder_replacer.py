@@ -1,5 +1,6 @@
 from abc import ABC
-from typing import Any, Callable, Dict
+
+from typing import Any, Dict, Protocol
 
 from tritonparse.reproducer.ingestion.ndjson import ContextBundle
 from tritonparse.reproducer.utils import (
@@ -7,6 +8,12 @@ from tritonparse.reproducer.utils import (
     _generate_invocation_snippet,
     _parse_kernel_signature,
 )
+
+
+class HandlerProtocol(Protocol):
+    def __call__(
+        self, code: str, context_bundle: ContextBundle, **kwargs: Any
+    ) -> str: ...
 
 
 class PlaceholderReplacer(ABC):
@@ -22,11 +29,9 @@ class PlaceholderReplacer(ABC):
 
     def __init__(self):
         # Dictionary mapping placeholder strings to handler functions
-        self.handlers: Dict[str, Callable[[str, ContextBundle, Any], str]] = {}
+        self.handlers: Dict[str, HandlerProtocol] = {}
 
-    def register(
-        self, placeholder: str, handler: Callable[[str, ContextBundle, Any], str]
-    ):
+    def register(self, placeholder: str, handler: HandlerProtocol):
         """
         Register a handler function for a specific placeholder.
 
@@ -37,7 +42,7 @@ class PlaceholderReplacer(ABC):
         self.handlers[placeholder] = handler
 
     def replace(
-        self, template_code: str, context_bundle: ContextBundle, **kwargs
+        self, template_code: str, context_bundle: ContextBundle, **kwargs: Any
     ) -> str:
         """
         Replace all registered placeholders in the template code.
@@ -52,7 +57,7 @@ class PlaceholderReplacer(ABC):
         """
         code = template_code
         for placeholder, handler in self.handlers.items():
-            code = handler(code, context_bundle, **kwargs)
+            code = handler(code, context_bundle)
         return code
 
 
