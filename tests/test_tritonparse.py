@@ -616,7 +616,8 @@ class TestTritonparseCUDA(unittest.TestCase):
         output_files_split_true = sorted(os.listdir(temp_output_dir_split_true))
         num_files_split_true = len(output_files_split_true)
         print(f"Output files (split=True): {num_files_split_true} files")
-        print(f"  Files: {output_files_split_true}")
+        for f in output_files_split_true:
+            print(f"  - {f}")
 
         # === Clear caches between tests ===
         second_test_cache_dir, original_cache_dir = clear_all_caches(add_kernel)
@@ -656,7 +657,8 @@ class TestTritonparseCUDA(unittest.TestCase):
         output_files_split_false = sorted(os.listdir(temp_output_dir_split_false))
         num_files_split_false = len(output_files_split_false)
         print(f"Output files (split=False): {num_files_split_false} files")
-        print(f"  Files: {output_files_split_false}")
+        for f in output_files_split_false:
+            print(f"  - {f}")
 
         # Check compilation events in parsed output for split=False
         ndjson_gz_files_split_false = [
