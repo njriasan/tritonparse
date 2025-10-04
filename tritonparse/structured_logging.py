@@ -281,7 +281,7 @@ def _log_torch_tensor_info(tensor_value):
             arg_info["mean"] = float_tensor.mean().item()
             arg_info["std"] = float_tensor.std().item()
         except (RuntimeError, ValueError, TypeError) as e:
-            log.debug(f"Unable to compute tensor statistics: {e}")
+            log.warning(f"Unable to compute tensor statistics: {e}")
             arg_info["tensor_capture_error"] = str(e)
     return arg_info
 
