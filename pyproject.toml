@@ -48,4 +48,4 @@ local_scheme = "no-local-version"
 "Homepage" = "https://github.com/meta-pytorch/tritonparse"
 
 [project.scripts]
-tritonparse = "tritonparse.run:main"
+tritonparseoss = "tritonparse.cli:main"
