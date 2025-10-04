@@ -273,12 +273,15 @@ def _log_torch_tensor_info(tensor_value):
         arg_info["data_ptr"] = hex(tensor_value.data_ptr())
     if TRITONPARSE_MORE_TENSOR_INFORMATION:
         try:
-            arg_info["min"] = tensor_value.min().item()
-            arg_info["max"] = tensor_value.max().item()
-            arg_info["mean"] = tensor_value.float().mean().item()
-            arg_info["std"] = tensor_value.float().std().item()
+            # Convert to float for reliable statistics computation across all dtypes
+            # This creates a new tensor without modifying the original
+            float_tensor = tensor_value.float()
+            arg_info["min"] = float_tensor.min().item()
+            arg_info["max"] = float_tensor.max().item()
+            arg_info["mean"] = float_tensor.mean().item()
+            arg_info["std"] = float_tensor.std().item()
         except (RuntimeError, ValueError, TypeError) as e:
-            log.error(f"Error computing additional tensor statistics: {e}")
+            log.error(f"Unable to compute tensor statistics: {e}")
             arg_info["tensor_capture_error"] = str(e)
     return arg_info
 

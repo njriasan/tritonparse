@@ -57,7 +57,7 @@ class PlaceholderReplacer(ABC):
         """
         code = template_code
         for placeholder, handler in self.handlers.items():
-            code = handler(code, context_bundle)
+            code = handler(code, context_bundle, **kwargs)
         return code
 
 

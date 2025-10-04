@@ -99,7 +99,10 @@ def oss_run(
         logs = copy_local_to_tmpdir(local_path, verbose)
 
     parsed_log_dir, _ = parse_logs(
-        logs, rank_config, verbose, split_inductor_compilations
+        logs,
+        rank_config,
+        verbose,
+        split_inductor_compilations=split_inductor_compilations,
     )
     if out is not None:
         save_logs(Path(out), parsed_log_dir, overwrite, verbose)
