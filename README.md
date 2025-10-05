@@ -9,13 +9,22 @@
 
 ## ✨ Key Features
 
-- **🚀 Launch Difference Analysis** - Automatically detect and visualize variations in kernel launch parameters, helping you pinpoint performance bottlenecks and debug launch configurations.
-- **🔍 Interactive Visualization** - Explore Triton kernels with detailed metadata and stack traces
-- **📊 Multi-format IR Support** - View TTGIR, TTIR, LLIR, PTX, and AMDGCN in one place
-- **🔄 Side-by-side Comparison** - Compare IR stages with synchronized highlighting
-- **📝 Structured Logging** - Capture detailed compilation and launch events with source mapping
-- **🌐 Ready-to-use Interface** - No installation required, works in your browser
-- **🔒 Privacy-first** - All processing happens locally in your browser, no data uploaded
+### 🔍 Visualization & Analysis
+- **🚀 Launch Difference Analysis** - Detect and visualize kernel launch parameter variations
+- **📊 IR Code View** - Side-by-side IR viewing with synchronized highlighting and line mapping
+- **🔄 File Diff View** - Compare kernels across different trace files side-by-side
+- **📝 Multi-format IR Support** - View TTGIR, TTIR, LLIR, PTX, and AMDGCN
+- **🎯 Interactive Code Views** - Click-to-highlight corresponding lines across IR stages
+
+### 📊 Structured Logging & Analysis
+- **📝 Compilation & Launch Tracing** - Capture detailed events with source mapping
+- **🔍 Stack Trace Integration** - Full Python stack traces for debugging
+- **📈 Metadata Extraction** - Comprehensive kernel statistics
+
+### 🛠️ Developer Tools
+- **🔧 Reproducer Generation** - Generate standalone Python scripts to reproduce kernels
+- **🌐 Browser-based Interface** - No installation required, works in your browser
+- **🔒 Privacy-first** - All processing happens locally, no data uploaded
 
 ## 🚀 Quick Start
 
@@ -23,22 +32,22 @@
 
 ```python
 import tritonparse.structured_logging
+import tritonparse.utils
 
-# Initialize logging with launch tracing enabled
+# Initialize logging
 tritonparse.structured_logging.init("./logs/", enable_trace_launch=True)
 
 # Your Triton/PyTorch code here
 # ... your kernels ...
 
 # Parse and generate trace files
-import tritonparse.utils
-tritonparse.utils.unified_parse("./logs/")
+tritonparse.utils.unified_parse("./logs/", out="./parsed_output")
 ```
-The example terminal output is:
-```bash
-tritonparse log file list: /tmp/tmp1gan7zky/log_file_list.json
-INFO:tritonparse:Copying parsed logs from /tmp/tmp1gan7zky to /scratch/findhao/tritonparse/tests/parsed_output
 
+<details>
+<summary>📝 Example output (click to expand)</summary>
+
+```bash
 ================================================================================
 📁 TRITONPARSE PARSING RESULTS
 ================================================================================
@@ -46,13 +55,13 @@ INFO:tritonparse:Copying parsed logs from /tmp/tmp1gan7zky to /scratch/findhao/t
 📊 Total files generated: 2
 
 📄 Generated files:
---------------------------------------------------
    1. 📝 dedicated_log_triton_trace_findhao__mapped.ndjson.gz (7.2KB)
    2. 📝 log_file_list.json (181B)
 ================================================================================
 ✅ Parsing completed successfully!
 ================================================================================
 ```
+</details>
 
 ### 2. Visualize Results
 
@@ -88,18 +97,13 @@ pip install triton
 
 | 📖 Guide | Description |
 |----------|-------------|
-| **[🏠 Wiki Home](https://github.com/meta-pytorch/tritonparse/wiki)** | Complete documentation and navigation |
-| **[📦 Installation Guide](https://github.com/meta-pytorch/tritonparse/wiki/01.-Installation)** | Detailed setup for all scenarios |
-| **[📋 Usage Guide](https://github.com/meta-pytorch/tritonparse/wiki/02.-Usage-Guide)** | Complete workflow and examples |
-| **[🌐 Web Interface Guide](https://github.com/meta-pytorch/tritonparse/wiki/03.-Web-Interface-Guide)** | Master the visualization interface |
-| **[🔧 Developer Guide](https://github.com/meta-pytorch/tritonparse/wiki/04.-Developer-Guide)** | Contributing and development setup |
-| **[❓ FAQ](https://github.com/meta-pytorch/tritonparse/wiki/06.-FAQ)** | Frequently asked questions |
-
-## 🛠️ Tech Stack
-
-- **Frontend**: React 19, TypeScript, Vite, Tailwind CSS, Monaco Editor
-- **Backend**: Python with Triton integration, structured logging
-- **Deployment**: GitHub Pages, automatic deployment
+| **[🏠 Wiki Home](https://github.com/meta-pytorch/tritonparse/wiki)** | Complete documentation and quick navigation |
+| **[📦 Installation](https://github.com/meta-pytorch/tritonparse/wiki/01.-Installation)** | Setup guide for all scenarios |
+| **[📋 Usage Guide](https://github.com/meta-pytorch/tritonparse/wiki/02.-Usage-Guide)** | Complete workflow, examples, and reproducer |
+| **[🌐 Web Interface](https://github.com/meta-pytorch/tritonparse/wiki/03.-Web-Interface-Guide)** | Master the visualization interface |
+| **[🔧 Developer Guide](https://github.com/meta-pytorch/tritonparse/wiki/04.-Developer-Guide)** | Contributing and architecture overview |
+| **[📝 Code Formatting](https://github.com/meta-pytorch/tritonparse/wiki/05.-Code-Formatting)** | Formatting standards and tools |
+| **[❓ FAQ](https://github.com/meta-pytorch/tritonparse/wiki/06.-FAQ)** | Quick answers and troubleshooting |
 
 ## 📊 Understanding Triton Compilation
 
@@ -112,9 +116,10 @@ Each stage can be inspected and compared to understand optimization transformati
 ## 🤝 Contributing
 
 We welcome contributions! Please see our **[Developer Guide](https://github.com/meta-pytorch/tritonparse/wiki/04.-Developer-Guide)** for:
-- Development setup
-- Code formatting standards
-- Pull request process
+- Development setup and prerequisites
+- Code formatting standards (**[Formatting Guide](https://github.com/meta-pytorch/tritonparse/wiki/05.-Code-Formatting)**)
+- Pull request and code review process
+- Testing guidelines
 - Architecture overview
 
 ## 📞 Support & Community
