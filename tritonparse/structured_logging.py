@@ -3,6 +3,7 @@
 import atexit
 import fnmatch
 import gzip
+import hashlib
 import importlib
 import inspect
 import io
@@ -11,6 +12,7 @@ import logging
 import math
 import os
 import subprocess
+import tempfile
 from collections import defaultdict
 from collections.abc import Mapping
 from dataclasses import asdict, is_dataclass
@@ -62,14 +64,290 @@ TRITONPARSE_DUMP_SASS = os.getenv("TRITONPARSE_DUMP_SASS", None) in [
 
 # The flag to mark if launch is traced. It is used to avoid initilizing the launch hook twice.
 _trace_launch_enabled = False
+# Enable tensor blob storage
+TRITONPARSE_SAVE_TENSOR_BLOBS = os.getenv("TRITONPARSE_SAVE_TENSOR_BLOBS", "0") in [
+    "1",
+    "true",
+    "True",
+]
+# Tensor size limit in bytes (default 10GB)
+TRITONPARSE_TENSOR_SIZE_LIMIT = int(
+    os.getenv("TRITONPARSE_TENSOR_SIZE_LIMIT", str(10 * 1024 * 1024 * 1024))
+)
+# Tensor storage quota in bytes (default 100GB) - tracks compressed size for current run
+TRITONPARSE_TENSOR_STORAGE_QUOTA = int(
+    os.getenv("TRITONPARSE_TENSOR_STORAGE_QUOTA", str(100 * 1024 * 1024 * 1024))
+)
+# Compression threshold in bytes (default 1MB) - only compress blobs >= this size
+TRITONPARSE_COMPRESSION_THRESHOLD = 1 * 1024 * 1024
+# Compression level for gzip (0-9, higher = better compression but slower)
+TRITONPARSE_COMPRESSION_LEVEL = 4
+# Log statistics every N saved blobs
+TRITONPARSE_STATS_LOG_FREQUENCY = 100
 
 TRITON_TRACE_HANDLER = None
+# Global tensor blob manager instance
+TENSOR_BLOB_MANAGER = None
+
 if importlib.util.find_spec("torch") is not None:
     TORCH_INSTALLED = True
     import torch
     from torch.utils._traceback import CapturedTraceback
 else:
     TORCH_INSTALLED = False
+
+
+class TensorBlobManager:
+    """
+    Manager for storing tensor data as content-addressed blobs.
+
+    Uses BLAKE2b hashing for content addressing and stores blobs in a two-level
+    directory structure to avoid filesystem limitations with large numbers of files.
+    """
+
+    def __init__(
+        self,
+        root_dir: Optional[str] = None,
+        storage_quota: Optional[int] = None,
+    ):
+        self.root_dir = None
+        self.hash_to_path_cache = {}  # In-memory cache for hash -> path mapping
+        self.compression_threshold = TRITONPARSE_COMPRESSION_THRESHOLD
+        self.storage_quota = (
+            storage_quota
+            if storage_quota is not None
+            else TRITONPARSE_TENSOR_STORAGE_QUOTA
+        )
+
+        # Resource statistics (tracks current run only)
+        self.total_compressed_bytes = 0  # Total compressed size written in this run
+        self.total_uncompressed_bytes = (
+            0  # Total uncompressed size (for compression ratio)
+        )
+        self.blob_count = 0  # Total blob references (including dedup hits)
+        self.blob_saved_count = 0  # Actual blobs saved (excluding dedup hits)
+        self.storage_disabled = False  # Whether storage has been disabled due to quota
+        self.storage_disabled_reason = None  # Reason for disabling storage
+
+        if root_dir:
+            self.set_root_dir(root_dir)
+
+    def set_root_dir(self, root_dir: str):
+        """Set the root directory for blob storage."""
+        self.root_dir = Path(root_dir) / "saved_tensors"
+        self.root_dir.mkdir(parents=True, exist_ok=True)
+        log.debug(f"TensorBlobManager: using root directory {self.root_dir}")
+
+    def _compute_hash(self, data: bytes) -> str:
+        """Compute BLAKE2b hash of the data."""
+        return hashlib.blake2b(data).hexdigest()
+
+    def _get_blob_path(self, hash_hex: str, extension: str = ".bin.gz") -> Path:
+        """Get the file path for a given hash using two-level directory structure."""
+        if not self.root_dir:
+            raise ValueError("Root directory not set")
+
+        # Two-level directory: first 2 chars / full_hash{extension}
+        subdir = hash_hex[:2]
+        filename = f"{hash_hex}{extension}"
+        return (self.root_dir / subdir / filename).resolve()
+
+    def _get_tensor_size_bytes(self, tensor) -> int:
+        """Get tensor size in bytes before serialization."""
+        if hasattr(tensor, "numel") and hasattr(tensor, "element_size"):
+            return tensor.numel() * tensor.element_size()
+        return 0
+
+    def _log_statistics(self, final: bool = False):
+        """Print statistics about tensor blob storage.
+
+        Args:
+            final: If True, this is the final statistics message (e.g., when storage is disabled)
+        """
+        prefix = "📊 Final" if final else "📊"
+        compression_ratio = (
+            self.total_uncompressed_bytes / max(1, self.total_compressed_bytes)
+            if self.total_compressed_bytes > 0
+            else 0.0
+        )
+        dedup_count = self.blob_count - self.blob_saved_count
+
+        log.info(
+            f"{prefix} Tensor blob stats: "
+            f"{self.blob_saved_count} saved ({self.blob_count} total, {dedup_count} dedup), "
+            f"{self.total_compressed_bytes / 1024**3:.2f}GB compressed "
+            f"({self.total_uncompressed_bytes / 1024**3:.2f}GB uncompressed), "
+            f"compression ratio: {compression_ratio:.2f}x"
+        )
+
+    def _disable_storage(self, reason: str):
+        """Disable blob storage and log warning with statistics.
+
+        Args:
+            reason: The reason why storage is being disabled
+        """
+        if not self.storage_disabled:  # Only disable once
+            self.storage_disabled = True
+            self.storage_disabled_reason = reason
+            log.warning(f"⚠️  TENSOR BLOB STORAGE DISABLED: {reason}")
+            self._log_statistics(final=True)
+
+    def save_tensor_blob(self, tensor) -> Dict[str, Any]:
+        """
+        Save tensor as a blob and return metadata.
+
+        Args:
+            tensor: PyTorch tensor to save
+
+        Returns:
+            Dictionary with blob metadata or error information:
+            - Success: {'tensor_hash': str, 'blob_path': str, 'blob_size': int,
+                       'blob_size_uncompressed': int, 'compression': str,
+                       'compression_ratio': float, 'serialization_method': str}
+            - Dedup hit: Same as success but from cache (not counted in quota)
+            - Error: {'error': str, 'tensor_hash': None}
+        """
+        # Early exit: Check if storage is disabled
+        if self.storage_disabled:
+            return {"error": self.storage_disabled_reason, "tensor_hash": None}
+
+        # Early exit: Check if root directory is set
+        if not self.root_dir:
+            return {"error": "Blob storage not initialized", "tensor_hash": None}
+
+        try:
+            # Check tensor size before serialization
+            tensor_size = self._get_tensor_size_bytes(tensor)
+            if tensor_size > TRITONPARSE_TENSOR_SIZE_LIMIT:
+                log.warning(
+                    f"Tensor size {tensor_size} bytes exceeds limit {TRITONPARSE_TENSOR_SIZE_LIMIT} bytes, skipping blob storage"
+                )
+                return {
+                    "error": f"Tensor size {tensor_size} bytes exceeds limit {TRITONPARSE_TENSOR_SIZE_LIMIT} bytes",
+                    "tensor_hash": None,
+                }
+
+            # Serialize tensor using torch.save
+            import io
+
+            buffer = io.BytesIO()
+            if TORCH_INSTALLED:
+                torch.save(tensor.cpu(), buffer)
+            else:
+                return {
+                    "error": "PyTorch not available for tensor serialization",
+                    "tensor_hash": None,
+                }
+
+            blob_data = buffer.getvalue()
+            uncompressed_size = len(blob_data)
+
+            # Compute hash on uncompressed data for content addressing
+            hash_hex = self._compute_hash(blob_data)
+
+            # Check for deduplication (before compression to save work)
+            if hash_hex in self.hash_to_path_cache:
+                blob_path = self.hash_to_path_cache[hash_hex]
+                if blob_path.exists():
+                    # Deduplication hit - increment count but don't add to quota
+                    self.blob_count += 1
+                    disk_size = blob_path.stat().st_size
+                    compression = (
+                        "gzip" if str(blob_path).endswith(".bin.gz") else "none"
+                    )
+                    compression_ratio = uncompressed_size / max(1, disk_size)
+
+                    return {
+                        "tensor_hash": hash_hex,
+                        "blob_path": str(blob_path),
+                        "blob_size": disk_size,
+                        "blob_size_uncompressed": uncompressed_size,
+                        "compression": compression,
+                        "compression_ratio": compression_ratio,
+                        "serialization_method": "torch_save",
+                        "deduplicated": True,
+                    }
+
+            # Decide whether to compress based on size threshold
+            if uncompressed_size >= self.compression_threshold:
+                # Compress the data
+                data_to_write = gzip.compress(
+                    blob_data, compresslevel=TRITONPARSE_COMPRESSION_LEVEL
+                )
+                file_extension = ".bin.gz"
+                compression = "gzip"
+            else:
+                # Don't compress small files (overhead not worth it)
+                data_to_write = blob_data
+                file_extension = ".bin"
+                compression = "none"
+
+            disk_size = len(data_to_write)
+
+            # Check quota BEFORE writing
+            if self.total_compressed_bytes + disk_size > self.storage_quota:
+                self._disable_storage(
+                    f"Storage quota would be exceeded: "
+                    f"{(self.total_compressed_bytes + disk_size) / 1024**3:.2f}GB > "
+                    f"{self.storage_quota / 1024**3:.2f}GB limit"
+                )
+                return {"error": self.storage_disabled_reason, "tensor_hash": None}
+
+            # Create blob file path with appropriate extension
+            blob_path = self._get_blob_path(hash_hex, extension=file_extension)
+            blob_path.parent.mkdir(parents=True, exist_ok=True)
+
+            # Atomic write using temporary file + rename
+            with tempfile.NamedTemporaryFile(
+                mode="wb",
+                dir=blob_path.parent,
+                prefix=f".tmp_{hash_hex}_",
+                delete=False,
+            ) as tmp_file:
+                tmp_file.write(data_to_write)
+                tmp_path = Path(tmp_file.name)
+
+            # Atomic rename
+            tmp_path.rename(blob_path)
+
+            # Update cache and statistics
+            self.hash_to_path_cache[hash_hex] = blob_path
+            self.total_compressed_bytes += disk_size
+            self.total_uncompressed_bytes += uncompressed_size
+            self.blob_count += 1
+            self.blob_saved_count += 1
+
+            # Log progress periodically
+            if self.blob_saved_count % TRITONPARSE_STATS_LOG_FREQUENCY == 0:
+                self._log_statistics()
+
+            log.debug(
+                f"Saved tensor blob: {hash_hex} -> {blob_path} ({disk_size} bytes, compression={compression})"
+            )
+
+            compression_ratio = uncompressed_size / max(1, disk_size)
+
+            return {
+                "tensor_hash": hash_hex,
+                "blob_path": str(blob_path),
+                "blob_size": disk_size,
+                "blob_size_uncompressed": uncompressed_size,
+                "compression": compression,
+                "compression_ratio": compression_ratio,
+                "serialization_method": "torch_save",
+            }
+
+        except (OSError, IOError) as e:
+            # Disk full, permission errors, etc. - disable storage to avoid repeated failures
+            error_msg = f"Failed to save tensor blob (I/O error): {str(e)}"
+            log.error(error_msg)
+            self._disable_storage(error_msg)
+            return {"error": error_msg, "tensor_hash": None}
+        except Exception as e:
+            # Other unexpected errors - log but don't disable storage
+            error_msg = f"Failed to save tensor blob: {str(e)}"
+            log.error(error_msg)
+            return {"error": error_msg, "tensor_hash": None}
 
 
 class TritonLogRecord(logging.LogRecord):
@@ -283,6 +561,11 @@ def _log_torch_tensor_info(tensor_value):
         except (RuntimeError, ValueError, TypeError) as e:
             log.error(f"Unable to compute tensor statistics: {e}")
             arg_info["tensor_capture_error"] = str(e)
+
+    # Add tensor blob storage if enabled
+    if TRITONPARSE_SAVE_TENSOR_BLOBS and TENSOR_BLOB_MANAGER is not None:
+        blob_info = TENSOR_BLOB_MANAGER.save_tensor_blob(tensor_value)
+        arg_info.update(blob_info)
     return arg_info
 
 
@@ -726,7 +1009,7 @@ def init_logs():
            DEBUG:tritonparse_trace:
        lines by blocking propagation to the root logger.
     """
-    global TRITON_TRACE_HANDLER, triton_trace_folder
+    global TRITON_TRACE_HANDLER, triton_trace_folder, TENSOR_BLOB_MANAGER
 
     # Basic logger settings (safe to run on every call)
     triton_trace_log.setLevel(logging.DEBUG)
@@ -751,6 +1034,16 @@ def init_logs():
     if TRITON_TRACE_HANDLER not in triton_trace_log.handlers:
         TRITON_TRACE_HANDLER.setFormatter(TritonJsonFormatter())
         triton_trace_log.addHandler(TRITON_TRACE_HANDLER)
+
+    # Initialize tensor blob manager if enabled
+    if TRITONPARSE_SAVE_TENSOR_BLOBS and root_dir:
+        if TENSOR_BLOB_MANAGER is None:
+            TENSOR_BLOB_MANAGER = TensorBlobManager(
+                root_dir=root_dir, storage_quota=TRITONPARSE_TENSOR_STORAGE_QUOTA
+            )
+        elif TENSOR_BLOB_MANAGER.root_dir is None:
+            # Update root_dir if it wasn't set during initialization
+            TENSOR_BLOB_MANAGER.set_root_dir(root_dir)
 
 
 def trace_structured_triton(
@@ -1153,6 +1446,8 @@ def init(
     enable_trace_launch: bool = False,
     enable_more_tensor_information: bool = False,
     enable_sass_dump: Optional[bool] = False,
+    enable_tensor_blob_storage: bool = False,
+    tensor_storage_quota: Optional[int] = None,
 ):
     """
     This function is a wrapper around init_basic() that also sets up the compilation listener. Its arguments have higher priority than the environment variables for same settings.
@@ -1163,9 +1458,15 @@ def init(
         enable_more_tensor_information (bool): Whether to enable more tensor information logging.
             It only works when enable_trace_launch/TRITON_TRACE_LAUNCH is True.
         enable_sass_dump (Optional[bool]): Whether to enable SASS dumping.
+        enable_tensor_blob_storage (bool): Whether to enable tensor blob storage.
+        tensor_storage_quota (Optional[int]): Storage quota in bytes for tensor blobs (default: 100GB).
     """
     global TRITON_TRACE_LAUNCH, TRITONPARSE_MORE_TENSOR_INFORMATION
     global TORCHINDUCTOR_RUN_JIT_POST_COMPILE_HOOK, TRITONPARSE_DUMP_SASS
+    global TRITONPARSE_SAVE_TENSOR_BLOBS, TRITONPARSE_TENSOR_STORAGE_QUOTA
+    global TENSOR_BLOB_MANAGER
+
+    # Set global flags BEFORE calling init_basic, so init_logs() can see them
     if enable_trace_launch:
         TRITON_TRACE_LAUNCH = True
         TORCHINDUCTOR_RUN_JIT_POST_COMPILE_HOOK = True
@@ -1173,6 +1474,12 @@ def init(
         TRITONPARSE_MORE_TENSOR_INFORMATION = True
     if enable_sass_dump:
         TRITONPARSE_DUMP_SASS = True
+    if enable_tensor_blob_storage:
+        TRITONPARSE_SAVE_TENSOR_BLOBS = True
+
+    # Set the quota in global var for TensorBlobManager creation in init_logs()
+    if tensor_storage_quota is not None:
+        TRITONPARSE_TENSOR_STORAGE_QUOTA = tensor_storage_quota
 
     init_basic(trace_folder)
     from triton import knobs
@@ -1202,7 +1509,7 @@ def clear_logging_config():
     """
     global TRITON_TRACE_HANDLER, triton_trace_folder, _KERNEL_ALLOWLIST_PATTERNS
     global _trace_launch_enabled
-
+    global TENSOR_BLOB_MANAGER
     # 1. Clean up the log handler
     if TRITON_TRACE_HANDLER is not None:
         if TRITON_TRACE_HANDLER in triton_trace_log.handlers:
@@ -1215,7 +1522,10 @@ def clear_logging_config():
     _KERNEL_ALLOWLIST_PATTERNS = None
     _trace_launch_enabled = False
 
-    # 3. Reset Triton knobs
+    # 3. Reset tensor blob manager and related flags
+    TENSOR_BLOB_MANAGER = None
+
+    # 4. Reset Triton knobs
     # Check if triton was actually imported and used
     from triton import knobs
 
