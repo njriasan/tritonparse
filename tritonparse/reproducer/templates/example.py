@@ -69,7 +69,7 @@ def load_tensor(tensor_file_path: str, device: str = None) -> torch.Tensor:
         raise FileNotFoundError(f"Tensor blob not found: {blob_path}")
 
     # Detect compression by file extension
-    is_compressed = str(blob_path).endswith('.bin.gz')
+    is_compressed = str(blob_path).endswith(".bin.gz")
 
     # Read file contents
     with open(blob_path, "rb") as f:
@@ -80,12 +80,14 @@ def load_tensor(tensor_file_path: str, device: str = None) -> torch.Tensor:
         try:
             file_contents = gzip.decompress(file_contents)
         except Exception as e:
-            raise RuntimeError(f"Failed to decompress gzip file {blob_path}: {str(e)}") from e
+            raise RuntimeError(
+                f"Failed to decompress gzip file {blob_path}: {str(e)}"
+            ) from e
 
     # Extract expected hash from filename
     if is_compressed:
         # abc123.bin.gz -> abc123
-        expected_hash = blob_path.name.replace('.bin.gz', '')
+        expected_hash = blob_path.name.replace(".bin.gz", "")
     else:
         # abc123.bin -> abc123
         expected_hash = blob_path.stem
