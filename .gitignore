@@ -70,4 +70,5 @@ env.bak/
 venv.bak/
 *.mdc
 repro_output/
+.github/copilot-instructions.md
 # end
