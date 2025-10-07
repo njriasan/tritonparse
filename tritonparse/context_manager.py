@@ -47,7 +47,7 @@ class TritonParseManager:
         }
         if self.tensor_storage_quota is not None:
             init_kwargs["tensor_storage_quota"] = self.tensor_storage_quota
-        
+
         init(self.dir_path, **init_kwargs)
         return self
 
