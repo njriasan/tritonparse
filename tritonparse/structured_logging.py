@@ -248,14 +248,16 @@ class TensorBlobManager:
             # Check for deduplication (before compression to save work)
             if hash_hex in self.hash_to_path_cache:
                 blob_path = self.hash_to_path_cache[hash_hex]
-                if blob_path.exists():
-                    # Deduplication hit - increment count but don't add to quota
-                    self.blob_count += 1
+                try:
+                    # Try to access the file - handles race condition where file might be deleted
                     disk_size = blob_path.stat().st_size
                     compression = (
                         "gzip" if str(blob_path).endswith(".bin.gz") else "none"
                     )
                     compression_ratio = uncompressed_size / max(1, disk_size)
+
+                    # Deduplication hit - increment count but don't add to quota
+                    self.blob_count += 1
 
                     return {
                         "tensor_hash": hash_hex,
@@ -267,6 +269,12 @@ class TensorBlobManager:
                         "serialization_method": "torch_save",
                         "deduplicated": True,
                     }
+                except (FileNotFoundError, OSError):
+                    # File was deleted or inaccessible - remove from cache and continue to save
+                    log.debug(
+                        f"Cached blob file no longer exists: {blob_path}, will re-save"
+                    )
+                    self.hash_to_path_cache.pop(hash_hex, None)
 
             # Decide whether to compress based on size threshold
             if uncompressed_size >= self.compression_threshold:
@@ -337,7 +345,7 @@ class TensorBlobManager:
                 "serialization_method": "torch_save",
             }
 
-        except (OSError, IOError) as e:
+        except OSError as e:
             # Disk full, permission errors, etc. - disable storage to avoid repeated failures
             error_msg = f"Failed to save tensor blob (I/O error): {str(e)}"
             log.error(error_msg)
@@ -1464,7 +1472,6 @@ def init(
     global TRITON_TRACE_LAUNCH, TRITONPARSE_MORE_TENSOR_INFORMATION
     global TORCHINDUCTOR_RUN_JIT_POST_COMPILE_HOOK, TRITONPARSE_DUMP_SASS
     global TRITONPARSE_SAVE_TENSOR_BLOBS, TRITONPARSE_TENSOR_STORAGE_QUOTA
-    global TENSOR_BLOB_MANAGER
 
     # Set global flags BEFORE calling init_basic, so init_logs() can see them
     if enable_trace_launch:
