@@ -10,16 +10,17 @@ import gzip
 import hashlib
 import io
 from pathlib import Path
+from typing import Union
 
 import torch
 
 
-def load_tensor(tensor_file_path: str, device: str = None) -> torch.Tensor:
+def load_tensor(tensor_file_path: Union[str, Path], device: str = None) -> torch.Tensor:
     """
     Load a tensor from its file path and verify its integrity using the hash in the filename.
 
     Args:
-        tensor_file_path (str): Direct path to the tensor file. Supports both:
+        tensor_file_path (str | Path): Direct path to the tensor file. Supports both:
                                - .bin.gz: gzip-compressed tensor (hash is of uncompressed data)
                                - .bin: uncompressed tensor (for backward compatibility)
         device (str, optional): Device to load the tensor to (e.g., 'cuda:0', 'cpu').
@@ -39,26 +40,22 @@ def load_tensor(tensor_file_path: str, device: str = None) -> torch.Tensor:
         raise FileNotFoundError(f"Tensor blob not found: {blob_path}")
 
     # Detect compression by file extension
-    is_compressed = str(blob_path).endswith(".bin.gz")
+    is_compressed = blob_path.name.endswith(".bin.gz")
 
-    # Read file contents
-    with open(blob_path, "rb") as f:
-        file_contents = f.read()
-
-    # Decompress if needed
-    if is_compressed:
-        try:
-            file_contents = gzip.decompress(file_contents)
-        except Exception as e:
+    # Read file contents (decompress if needed)
+    try:
+        with open(blob_path, "rb") as f:
+            file_obj = gzip.GzipFile(fileobj=f, mode="rb") if is_compressed else f
+            file_contents = file_obj.read()
+    except (OSError, gzip.BadGzipFile) as e:
+        if is_compressed:
             raise RuntimeError(f"Failed to decompress gzip file {blob_path}: {str(e)}")
+        else:
+            raise RuntimeError(f"Failed to read file {blob_path}: {str(e)}")
 
     # Extract expected hash from filename
-    if is_compressed:
-        # abc123.bin.gz -> abc123
-        expected_hash = blob_path.name.replace(".bin.gz", "")
-    else:
-        # abc123.bin -> abc123
-        expected_hash = blob_path.stem
+    # abc123.bin.gz -> abc123 or abc123.bin -> abc123
+    expected_hash = blob_path.name.removesuffix(".bin.gz" if is_compressed else ".bin")
 
     # Compute hash of uncompressed data
     computed_hash = hashlib.blake2b(file_contents).hexdigest()
@@ -71,8 +68,7 @@ def load_tensor(tensor_file_path: str, device: str = None) -> torch.Tensor:
 
     try:
         # Load the tensor from memory buffer
-        buffer = io.BytesIO(file_contents)
-        tensor = torch.load(buffer, map_location=device)
+        tensor = torch.load(io.BytesIO(file_contents), map_location=device)
         return tensor
     except Exception as e:
         raise RuntimeError(f"Failed to load tensor from {blob_path}: {str(e)}")
