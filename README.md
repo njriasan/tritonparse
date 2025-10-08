@@ -16,13 +16,18 @@
 - **📝 Multi-format IR Support** - View TTGIR, TTIR, LLIR, PTX, and AMDGCN
 - **🎯 Interactive Code Views** - Click-to-highlight corresponding lines across IR stages
 
+### 🔧 Reproducer & Debugging Tools
+- **🔄 Standalone Script Generation** - Extract any kernel into a self-contained Python script
+- **💾 Tensor Data Reconstruction** - Preserve actual tensor data or use statistical approximation
+- **🎯 Custom Templates** - Flexible reproducer templates for different workflows
+- **🐛 Bug Isolation** - Share reproducible test cases for debugging and collaboration
+
 ### 📊 Structured Logging & Analysis
 - **📝 Compilation & Launch Tracing** - Capture detailed events with source mapping
 - **🔍 Stack Trace Integration** - Full Python stack traces for debugging
 - **📈 Metadata Extraction** - Comprehensive kernel statistics
 
 ### 🛠️ Developer Tools
-- **🔧 Reproducer Generation** - Generate standalone Python scripts to reproduce kernels
 - **🌐 Browser-based Interface** - No installation required, works in your browser
 - **🔒 Privacy-first** - All processing happens locally, no data uploaded
 
@@ -69,6 +74,41 @@ tritonparse.utils.unified_parse("./logs/", out="./parsed_output")
 
 > **🔒 Privacy Note**: Your trace files are processed entirely in your browser - nothing is uploaded to any server!
 
+### 3. Generate Reproducers (Optional)
+
+Extract any kernel into a standalone, executable Python script for debugging or testing:
+
+```bash
+# Generate reproducer from first launch event
+tritonparse reproduce ./parsed_output/trace.ndjson.gz --line 2 --out-dir repro_output
+
+# Run the generated reproducer
+cd repro_output/<kernel_name>/
+python repro_*.py
+```
+
+**Python API:**
+```python
+from tritonparse.reproducer.orchestrator import reproduce
+
+result = reproduce(
+    input_path="./parsed_output/trace.ndjson.gz",
+    line_index=1,           # Which launch event (1-based)
+    out_dir="repro_output"
+)
+```
+
+<details>
+<summary>🎯 Common Reproducer Use Cases (click to expand)</summary>
+
+- **🐛 Bug Isolation**: Extract a failing kernel into a minimal standalone script
+- **⚡ Performance Testing**: Benchmark specific kernels without running the full application
+- **🤝 Team Collaboration**: Share reproducible test cases with colleagues or in bug reports
+- **📊 Regression Testing**: Compare kernel behavior and performance across different versions
+- **🔍 Deep Debugging**: Modify and experiment with kernel parameters in isolation
+
+</details>
+
 ## 🛠️ Installation
 
 **For basic usage (trace generation):**
@@ -99,7 +139,7 @@ pip install triton
 |----------|-------------|
 | **[🏠 Wiki Home](https://github.com/meta-pytorch/tritonparse/wiki)** | Complete documentation and quick navigation |
 | **[📦 Installation](https://github.com/meta-pytorch/tritonparse/wiki/01.-Installation)** | Setup guide for all scenarios |
-| **[📋 Usage Guide](https://github.com/meta-pytorch/tritonparse/wiki/02.-Usage-Guide)** | Complete workflow, examples, and reproducer |
+| **[📋 Usage Guide](https://github.com/meta-pytorch/tritonparse/wiki/02.-Usage-Guide)** | Complete workflow, reproducer generation, and examples |
 | **[🌐 Web Interface](https://github.com/meta-pytorch/tritonparse/wiki/03.-Web-Interface-Guide)** | Master the visualization interface |
 | **[🔧 Developer Guide](https://github.com/meta-pytorch/tritonparse/wiki/04.-Developer-Guide)** | Contributing and architecture overview |
 | **[📝 Code Formatting](https://github.com/meta-pytorch/tritonparse/wiki/05.-Code-Formatting)** | Formatting standards and tools |
