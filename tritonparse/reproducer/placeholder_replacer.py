@@ -67,15 +67,19 @@ class DefaultPlaceholderReplacer(PlaceholderReplacer):
 
     Handles the following placeholders:
     - {{JSON_FILE_NAME_PLACEHOLDER}}: Replaced with the JSON file name
-    - # {{KERNEL_SYSPATH_PLACEHOLDER}}: Replaced with sys.path setup code
-    - # {{KERNEL_IMPORT_PLACEHOLDER}}: Replaced with kernel import statement
+    - # {{KERNEL_SYSPATH_PLACEHOLDER}}: Replaced with sys.path setup code (skipped if ir_override=True)
+    - # {{KERNEL_IMPORT_PLACEHOLDER}}: Replaced with kernel import statement (skipped if ir_override=True)
     - # {{KERNEL_INVOCATION_PLACEHOLDER}}: Replaced with kernel invocation code
+    - # {{IR_OVERRIDE_SETUP_PLACEHOLDER}}: Replaced with IR override setup code (if ir_override=True)
     """
 
     def __init__(self):
         super().__init__()
         # Register all default handlers
         self.register("{{JSON_FILE_NAME_PLACEHOLDER}}", self._replace_json_filename)
+        self.register(
+            "# {{IR_OVERRIDE_SETUP_PLACEHOLDER}}", self._replace_ir_override_setup
+        )
         self.register("# {{KERNEL_SYSPATH_PLACEHOLDER}}", self._replace_kernel_syspath)
         self.register("# {{KERNEL_IMPORT_PLACEHOLDER}}", self._replace_kernel_import)
         self.register(
@@ -91,17 +95,87 @@ class DefaultPlaceholderReplacer(PlaceholderReplacer):
             raise ValueError("temp_json_path is required for JSON filename replacement")
         return code.replace("{{JSON_FILE_NAME_PLACEHOLDER}}", temp_json_path.name)
 
+    def _replace_ir_override_setup(
+        self, code: str, context_bundle: ContextBundle, **kwargs
+    ) -> str:
+        """Replace the IR override setup placeholder."""
+        ir_override = kwargs.get("ir_override", False)
+        comp_json_filename = kwargs.get("comp_json_filename", "")
+
+        if not ir_override:
+            return code.replace("# {{IR_OVERRIDE_SETUP_PLACEHOLDER}}", "")
+
+        setup_code = f'''
+def create_ttir_tempfile():
+    """Extract TTIR from compilation event and create temporary file."""
+    script_dir = Path(__file__).resolve().parent
+    comp_json_file = script_dir / "{comp_json_filename}"
+    
+    with open(comp_json_file, 'r') as f:
+        comp_data = json.load(f)
+    
+    # Extract TTIR content
+    kernel_name = comp_data['payload']['metadata']['name']
+    ttir_key = f"{{kernel_name}}.ttir"
+    ttir_content = comp_data['payload']['file_content'][ttir_key]
+    
+    # Create temporary file
+    temp_file = tempfile.NamedTemporaryFile(
+        mode='w', 
+        suffix='.ttir', 
+        delete=False,
+        prefix=f'{{kernel_name}}_'
+    )
+    temp_file.write(ttir_content)
+    temp_file.close()
+    return temp_file.name
+
+
+# Monkeypatch triton.autotune to use our TTIR
+_ttir_file = create_ttir_tempfile()
+_original_autotune = None
+
+def _patched_autotune(configs, key=None, **kwargs):
+    """Patched autotune that uses our TTIR file."""
+    import triton
+    # Replace configs with our single config using ir_override
+    new_configs = [triton.Config(kwargs={{}}, ir_override=_ttir_file)]
+    # Call original autotune with our config
+    return _original_autotune(new_configs, key=[], **kwargs)
+
+# Apply the monkeypatch before importing the kernel
+import triton
+_original_autotune = triton.autotune
+triton.autotune = _patched_autotune
+'''
+
+        return code.replace("# {{IR_OVERRIDE_SETUP_PLACEHOLDER}}", setup_code)
+
     def _replace_kernel_syspath(
         self, code: str, context_bundle: ContextBundle, **kwargs
     ) -> str:
-        """Replace the kernel sys.path placeholder."""
-        sys_stmt, _ = _generate_import_statements(context_bundle.kernel_info)
-        return code.replace("# {{KERNEL_SYSPATH_PLACEHOLDER}}", sys_stmt)
+        """Replace the kernel sys.path setup placeholder."""
+        ir_override = kwargs.get("ir_override", False)
+        
+        if ir_override:
+            # IR override mode: skip sys.path setup
+            comment = "# Kernel sys.path setup skipped - using IR override mode"
+            return code.replace("# {{KERNEL_SYSPATH_PLACEHOLDER}}", comment)
+        
+        syspath_code, _ = _generate_import_statements(context_bundle.kernel_info)
+        return code.replace("# {{KERNEL_SYSPATH_PLACEHOLDER}}", syspath_code)
 
     def _replace_kernel_import(
         self, code: str, context_bundle: ContextBundle, **kwargs
     ) -> str:
         """Replace the kernel import placeholder."""
+        ir_override = kwargs.get("ir_override", False)
+        
+        if ir_override:
+            # IR override mode: skip kernel import
+            comment = "# Kernel import skipped - dummy kernel defined in IR override setup above"
+            return code.replace("# {{KERNEL_IMPORT_PLACEHOLDER}}", comment)
+        
         _, import_statement = _generate_import_statements(context_bundle.kernel_info)
         return code.replace("# {{KERNEL_IMPORT_PLACEHOLDER}}", import_statement)
 

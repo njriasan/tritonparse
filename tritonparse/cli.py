@@ -70,9 +70,10 @@ def main():
     elif args.func == "reproduce":
         reproduce(
             input_path=args.input,
-            line_index=args.line,
+            line_index=args.line - 1,  # Convert from 1-based to 0-based
             out_dir=args.out_dir,
             template=args.template,
+            ir_override=args.ir_override,
         )
     else:
         raise RuntimeError(f"Unknown command: {args.func}")

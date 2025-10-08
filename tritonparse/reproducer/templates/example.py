@@ -10,11 +10,14 @@ import io
 import json
 import logging
 import sys
+import tempfile
 from functools import lru_cache
 from pathlib import Path
 from typing import Union
 
 import torch
+
+# {{IR_OVERRIDE_SETUP_PLACEHOLDER}}
 
 # {{KERNEL_SYSPATH_PLACEHOLDER}}
 

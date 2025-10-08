@@ -29,3 +29,12 @@ def _add_reproducer_args(parser: argparse.ArgumentParser) -> None:
             "Defaults to 'example'."
         ),
     )
+    parser.add_argument(
+        "--ir-override",
+        action="store_true",
+        help=(
+            "Use ir_override mode to run with TTIR from compilation event. "
+            "When enabled, the reproducer will monkeypatch triton.autotune to use "
+            "the TTIR from the compilation event."
+        ),
+    )

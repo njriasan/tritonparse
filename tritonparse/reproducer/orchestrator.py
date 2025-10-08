@@ -19,16 +19,18 @@ def reproduce(
     out_dir: str,
     template: str,
     replacer: Optional[PlaceholderReplacer] = None,
+    ir_override: bool = False,
 ) -> dict[str, Path]:
     """
     Generate a reproducer script from NDJSON trace file.
 
     Args:
-        input_path: Path to the NDJSON trace file.
-        line_index: Line index of the launch event to reproduce.
+        input_path: Path to the input NDJSON trace file.
+        line_index: 0-based index of the launch event to reproduce.
         out_dir: Output directory for reproducer files.
         template: Template name to use for the reproducer.
         replacer: Optional custom PlaceholderReplacer instance. If None, uses DefaultPlaceholderReplacer.
+        ir_override: If True, use ir_override mode with TTIR from compilation event.
     """
     logger.debug(f"Building bundle from {input_path} at line {line_index}")
     events = load_ndjson(Path(input_path))
@@ -43,6 +45,11 @@ def reproduce(
         out_dir, context_bundle.kernel_info.function_name
     )
     save_prettified_json(context_bundle.raw_launch_event, temp_json_path)
+    
+    # Save compilation event JSON (based on launch json filename)
+    comp_json_path = temp_json_path.parent / f"{temp_json_path.stem}_compilation.json"
+    save_prettified_json(context_bundle.raw_comp_event, comp_json_path)
+    
     logger.debug("Loading reproducer template.")
     template_code = load_template_code(template)
 
@@ -51,7 +58,11 @@ def reproduce(
     if replacer is None:
         replacer = DefaultPlaceholderReplacer()
     final_code = replacer.replace(
-        template_code, context_bundle, temp_json_path=temp_json_path
+        template_code,
+        context_bundle,
+        temp_json_path=temp_json_path,
+        comp_json_filename=comp_json_path.name,
+        ir_override=ir_override,
     )
 
     out_py_path.write_text(final_code, encoding="utf-8")
