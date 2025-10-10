@@ -33,7 +33,30 @@
 
 ## 🚀 Quick Start
 
-### 1. Generate Traces
+### 1. Installation
+
+**Four options to install:**
+```bash
+# install nightly version
+pip install -U --pre tritonparse
+# install stable version
+pip install tritonparse
+# install from source
+git clone https://github.com/meta-pytorch/tritonparse.git
+cd tritonparse
+pip install -e .
+# pip install the latest version from github
+pip install git+https://github.com/meta-pytorch/tritonparse.git
+```
+
+**Prerequisites:** Python ≥ 3.10, Triton ≥ 3.4.0, GPU required (NVIDIA/AMD)
+
+TritonParse relies on new features in Triton. If you're using nightly PyTorch, Triton is already included. Otherwise, install the latest Triton:
+```bash
+pip install triton
+```
+
+### 2. Generate Traces
 
 ```python
 import tritonparse.structured_logging
@@ -68,19 +91,19 @@ tritonparse.utils.unified_parse("./logs/", out="./parsed_output")
 ```
 </details>
 
-### 2. Visualize Results
+### 3. Visualize Results
 
 **Visit [https://meta-pytorch.org/tritonparse/](https://meta-pytorch.org/tritonparse/?json_url=https://meta-pytorch.org/tritonparse/dedicated_log_triton_trace_findhao__mapped.ndjson.gz)** and open your local trace files (.ndjson.gz format).
 
 > **🔒 Privacy Note**: Your trace files are processed entirely in your browser - nothing is uploaded to any server!
 
-### 3. Generate Reproducers (Optional)
+### 4. Generate Reproducers (Optional)
 
 Extract any kernel into a standalone, executable Python script for debugging or testing:
 
 ```bash
 # Generate reproducer from first launch event
-tritonparse reproduce ./parsed_output/trace.ndjson.gz --line 2 --out-dir repro_output
+tritonparseoss reproduce ./parsed_output/trace.ndjson.gz --line 2 --out-dir repro_output
 
 # Run the generated reproducer
 cd repro_output/<kernel_name>/
@@ -108,30 +131,6 @@ result = reproduce(
 - **🔍 Deep Debugging**: Modify and experiment with kernel parameters in isolation
 
 </details>
-
-## 🛠️ Installation
-
-**For basic usage (trace generation):**
-Four options:
-```bash
-# install nightly version
-pip install -U --pre tritonparse
-# install stable version
-pip install tritonparse
-# install from source
-git clone https://github.com/meta-pytorch/tritonparse.git
-cd tritonparse
-pip install -e .
-# pip install the latest version from github
-pip install git+https://github.com/meta-pytorch/tritonparse.git
-```
-
-**Prerequisites:** Python ≥ 3.10, Triton ≥ 3.4.0, GPU required (NVIDIA/AMD)
-
-TritonParse relies on new features in Triton. Please install the latest version of Triton:
-```bash
-pip install triton
-```
 
 ## 📚 Complete Documentation
 
