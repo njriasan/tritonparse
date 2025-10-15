@@ -141,7 +141,7 @@ const KernelOverview: React.FC<KernelOverviewProps> = ({
 
       {/* Kernel Selection */}
       <div
-        className={`bg-white rounded-lg shadow border border-gray-200 transition-all duration-300 mb-4 ${
+        className={`bg-white rounded-lg shadow-sm border border-gray-200 transition-all duration-300 mb-4 ${
           isSticky ? "sticky top-4 z-10 p-2" : "p-4"
         }`}
         onMouseEnter={() => isSticky && setIsCollapsed(false)}
@@ -229,7 +229,7 @@ const KernelOverview: React.FC<KernelOverviewProps> = ({
       </div>
 
       {/* Kernel Details */}
-      <div className="bg-white rounded-lg p-4 mb-4 shadow border border-gray-200">
+      <div className="bg-white rounded-lg p-4 mb-4 shadow-sm border border-gray-200">
         <h2 className="text-xl font-semibold mb-4 text-gray-800">
           Kernel Details: {kernel.name}
         </h2>

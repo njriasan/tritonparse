@@ -18,7 +18,7 @@ const CompilationInfo: React.FC<CompilationInfoProps> = ({
   statistics,
 }) => {
   return (
-    <div className="bg-white rounded-lg p-4 mb-4 shadow border border-gray-200">
+    <div className="bg-white rounded-lg p-4 mb-4 shadow-sm border border-gray-200">
       <h2 className="text-xl font-semibold mb-4 text-gray-800">
         Compilation Information
       </h2>

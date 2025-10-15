@@ -361,7 +361,7 @@ const CodeComparisonView: React.FC<CodeComparisonViewProps> = ({
 
     // Render two or three panels based on whether Python source is available
     return (
-        <div className="h-[calc(100vh-12rem)] bg-white rounded-lg overflow-hidden shadow border border-gray-200">
+        <div className="h-[calc(100vh-12rem)] bg-white rounded-lg overflow-hidden shadow-sm border border-gray-200">
             {/* Resizable panel layout */}
             <PanelGroup direction="horizontal">
                 {/* Left panel */}

@@ -132,6 +132,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Cleaner configuration surface
 
 #### 🌐 **Website & UI**
+- **Upgraded to Tailwind CSS v4** (commit 6c42d8a):
+  - Migrated from PostCSS plugin to `@tailwindcss/vite` for improved performance
+  - Updated CSS import syntax from `@tailwind` directives to `@import "tailwindcss"`
+  - Removed `tailwind.config.js` and `postcss.config.js` (now CSS-based configuration)
+  - Updated `shadow` class naming to v4 convention (`shadow` → `shadow-sm`)
+  - Cleaned up global CSS to prevent interference with Tailwind utility classes
+- **Upgraded all frontend dependencies**:
+  - Vite: 6.3.5 → 7.1.10
+  - React ecosystem: Updated to latest versions (React 19+)
+  - TypeScript: 5.7.2 → 5.7.3
+  - Added `@types/node` for Node.js type definitions
+  - Fixed dompurify security vulnerability (3.1.7 → 3.3.0) via npm overrides
 - **Light mode color scheme** (PR #139):
   - Updated `index.css` to support only light mode
   - Consistent, professional appearance

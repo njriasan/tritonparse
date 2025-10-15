@@ -111,7 +111,7 @@ const SingleCodeViewer: React.FC<SingleCodeViewerProps> = ({
       </div>
 
       {/* Code viewer container */}
-      <div className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
         {/* Panel title bar */}
         <div className="bg-blue-600 text-white p-2 font-medium flex justify-between items-center">
           <span>{title}</span>
