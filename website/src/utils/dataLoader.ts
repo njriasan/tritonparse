@@ -299,7 +299,7 @@ function isGzipFile(buffer: ArrayBuffer): boolean {
  * @returns A promise that resolves to an array of LogEntry objects
  */
 async function parseLogDataFromStream(stream: ReadableStream<Uint8Array>): Promise<LogEntry[]> {
-    const reader = stream.pipeThrough(new TextDecoderStream()).getReader();
+    const reader = stream.pipeThrough(new TextDecoderStream() as any).getReader();
     let buffer = '';
     const entries: LogEntry[] = [];
 

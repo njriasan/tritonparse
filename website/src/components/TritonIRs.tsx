@@ -35,7 +35,7 @@ interface TritonIRsProps {
 
 const TritonIRs: React.FC<TritonIRsProps> = ({ irFiles, onViewIR }) => {
   return (
-    <div className="bg-white rounded-lg p-4 mb-4 shadow border border-gray-200">
+    <div className="bg-white rounded-lg p-4 mb-4 shadow-sm border border-gray-200">
       <h2 className="text-xl font-semibold mb-4 text-gray-800">Triton IRs</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {Object.entries(irFiles).map(([irType, _]) => (

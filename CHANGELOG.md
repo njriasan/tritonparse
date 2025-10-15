@@ -5,6 +5,185 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2025-10-14
+
+### TritonParse Release Notes (last 44 commits)
+
+- **Date range**: 2025-09-19 — 2025-10-14
+- **Scope**: Major feature release - Reproducer system, tensor storage, SASS support, enhanced context manager, CLI improvements.
+
+### Highlights
+
+- **🔄 Reproducer System (Complete)**: Full-featured standalone kernel script generation with template support, tensor reconstruction, and multiple import modes. Extract any traced kernel into a self-contained Python script for debugging, testing, and sharing.
+- **💾 TensorBlobManager**: Production-ready content-addressed tensor storage with automatic compression, deduplication, quota management, and efficient disk usage. Enables high-fidelity kernel reproduction with actual tensor data.
+- **🔧 SASS Disassembly Support**: Optional NVIDIA SASS disassembly during compilation tracing for low-level debugging and performance analysis. Toggle via `enable_sass_dump` parameter or `TRITONPARSE_DUMP_SASS` environment variable.
+- **🎯 Enhanced Context Manager**: Configurable `TritonParseManager` context manager with support for trace launch control, inductor compilation splitting, and flexible parsing parameters.
+- **⚡ CLI Modernization**: Refactored to subcommand structure (`tritonparse parse`, `tritonparse reproduce`) with unified entry point and improved argument handling.
+- **📊 Auto-enable Inductor Launch Tracing**: Automatic detection and tracing of PyTorch Inductor-compiled kernels without manual configuration.
+- **🌐 Website Improvements**: Light mode color scheme, improved stack display in Launch Analysis, and better file diff navigation.
+
+### Changes by area
+
+#### 🔄 **Reproducer System**
+- **Complete reproducer infrastructure** (PR #117-127):
+  - CLI subcommand structure: `tritonparse reproduce <ndjson_file> [options]`
+  - NDJSON ingestion layer with IR preservation
+  - Context bundle system for kernel metadata and parameters
+  - Standardized output paths: `repro_output/<kernel_name>/repro_<timestamp>.py`
+  - Template support with placeholder system for custom generation
+  - Example templates for tensor loading and kernel invocation
+  - Dynamic import generation for kernel dependencies
+  - Kernel signature parsing and integration
+  - Kernel invocation snippet generation with grid/block configuration
+- **Kernel import modes** (PR #165, #166):
+  - `--kernel-import direct`: Import kernel from source file
+  - `--kernel-import override-ttir`: Override and inject TTIR for advanced debugging
+  - Flexible kernel loading strategies for different debugging workflows
+- **Enhanced tensor handling** (PR #141):
+  - Improved tensor metadata logging (shape, dtype, stride, storage offset, device)
+  - Better tensor reconstruction quality in generated reproducers
+  - Support for non-contiguous tensors (commit 12f1d1b)
+- **Extensible placeholder system** (PR #149):
+  - Refactored placeholder replacement with class-based design
+  - Support for: `{{KERNEL_IMPORT_PLACEHOLDER}}`, `{{KERNEL_INVOCATION_PLACEHOLDER}}`, `{{KERNEL_SYSPATH_PLACEHOLDER}}`, `{{JSON_FILE_NAME_PLACEHOLDER}}`
+  - Easy extension for future template needs
+- **Documentation**: Comprehensive reproducer section in README (PR #161) and Usage Guide in Wiki
+
+#### 💾 **TensorBlobManager & Storage**
+- **Production-ready blob storage** (PR #156):
+  - Content-addressed storage using BLAKE2b hashing
+  - Automatic gzip compression for large tensors (>1MB)
+  - Two-level directory structure (`xx/hash.bin.gz`) to avoid filesystem limits
+  - Automatic deduplication: identical tensors stored only once
+  - Storage quota enforcement (default: 100GB)
+  - Per-tensor size limit (default: 10GB) to prevent OOM
+  - Real-time statistics: saved count, dedup hits, compression ratio
+  - Graceful degradation with warning logs when quota exceeded
+- **Compression support** (PR #157):
+  - Configurable compression level (default: 4)
+  - Atomic writes using temporary files + rename for safety
+  - Hash verification for data integrity
+- **Comprehensive testing** (PR #162):
+  - Unit tests for compression, deduplication, quota management
+  - Edge case handling and cleanup verification
+
+#### 🔧 **SASS Disassembly**
+- **SASS extraction support** (PR #137):
+  - New tool: `tritonparse/tools/disasm.py` for CUBIN disassembly
+  - Integration into structured logging behind opt-in flag
+  - Uses `nvdisasm -c -gp -g -gi` for detailed disassembly
+  - Parses output to find function blocks with preserved labels and source mapping
+- **Configuration**:
+  - Environment variable: `TRITONPARSE_DUMP_SASS=1`
+  - API parameter: `enable_sass_dump=True` in `structured_logging.init()`
+  - API parameter takes precedence over environment variable
+- **Robustness**:
+  - Error handling for subprocess failures, missing nvdisasm, and generic exceptions
+  - Writes marker messages instead of failing the trace
+  - Requires NVIDIA CUDA Binary Utilities (nvdisasm)
+- **CUDA testing** (PR #138):
+  - Strengthened tests to validate SASS extraction and persistence
+
+#### 🎯 **Context Manager & API**
+- **Enhanced context manager** (PR #144, #159):
+  - Added `__init__` method with configurable parameters:
+    - `enable_trace_launch`: Control trace launch logging
+    - `split_inductor_compilations`: Control inductor compilation splitting
+    - `**parse_kwargs`: Additional arguments for `unified_parse`
+  - Updated `__exit__` to pass parameters through to parsing pipeline
+  - More flexible for different use cases and workflows
+- **Split inductor compilations control**:
+  - Parameter threading through: `unified_parse()` → `oss_run()` → `parse_logs()` → `parse_single_file()`
+  - Renamed from `split_by_frame_id_and_compile_id` to `split_inductor_compilations` for clarity
+  - Default `True`: splits by frame_id, frame_compile_id, attempt_id, compiled_autograd_id
+  - When `False`: groups all inductor compilations together
+  - Follows tlparse's convention
+- **Unit tests** (commit a5338ce):
+  - Tests for enhanced context manager behavior
+  - Validation of split inductor compilation modes
+
+#### ⚡ **CLI & Entry Points**
+- **Subcommand structure** (PR #117):
+  - Refactored from single-command to modern subcommand architecture
+  - `tritonparse parse <source> [options]` - Run structured log parser
+  - `tritonparse reproduce <ndjson_file> [options]` - Generate reproducers
+  - Breaking change: old `python run.py <source>` no longer works
+  - Extract parser flags into `tritonparse.utils._add_parse_args()`
+  - Remove `unified_parse_from_cli` (programmatic `unified_parse()` remains)
+- **Unified entry point** (PR #133):
+  - Added proper CLI entry point in package configuration
+  - Unified argument handling across commands
+- **CLI entry point fix** (PR #154):
+  - Fixed `ModuleNotFoundError` for tritonparse CLI entry point
+  - Improved package installation and command availability
+
+#### 📊 **Logging & Tracing**
+- **Auto-enable Inductor Launch Tracing** (PR #142):
+  - Automatically detect and trace PyTorch Inductor-compiled kernels
+  - No manual configuration required for Inductor workflows
+  - Seamless integration with existing tracing infrastructure
+- **Kernel source path output** (commit 03bc1e1):
+  - Output `kernel_src_path` in trace metadata for better debugging
+- **NDJSON prettifier improvements** (PR #135):
+  - Renamed and inverted flag to default-filter IRs
+  - More intuitive filtering behavior
+- **Debug flag deprecation** (PR #132):
+  - Removed unused debugging flags
+  - Cleaner configuration surface
+
+#### 🌐 **Website & UI**
+- **Upgraded to Tailwind CSS v4** (commit 6c42d8a):
+  - Migrated from PostCSS plugin to `@tailwindcss/vite` for improved performance
+  - Updated CSS import syntax from `@tailwind` directives to `@import "tailwindcss"`
+  - Removed `tailwind.config.js` and `postcss.config.js` (now CSS-based configuration)
+  - Updated `shadow` class naming to v4 convention (`shadow` → `shadow-sm`)
+  - Cleaned up global CSS to prevent interference with Tailwind utility classes
+- **Upgraded all frontend dependencies**:
+  - Vite: 6.3.5 → 7.1.10
+  - React ecosystem: Updated to latest versions (React 19+)
+  - TypeScript: 5.7.2 → 5.7.3
+  - Added `@types/node` for Node.js type definitions
+  - Fixed dompurify security vulnerability (3.1.7 → 3.3.0) via npm overrides
+- **Light mode color scheme** (PR #139):
+  - Updated `index.css` to support only light mode
+  - Consistent, professional appearance
+- **Improved stack display** (PR #151):
+  - Better stack trace visualization in Launch Analysis
+  - Clearer debugging information
+- **Documentation cleanup** (PR #172):
+  - Removed redundant docs directory and screenshots
+  - Streamlined repository structure
+
+#### 🔧 **Bug Fixes & Maintenance**
+- **General bug fixes** (PR #153):
+  - Multiple stability and reliability improvements
+  - Better error handling throughout codebase
+- **Deserialization fix** (commit d4d7a20):
+  - Fixed unhandled types in deserialization
+  - More robust data loading
+- **README improvements** (PR #158, #164):
+  - Refactored and cleaned up README
+  - Fixed command typos in reproducer generation examples
+  - Clearer installation and usage instructions
+- **Test cleanup** (PR #160):
+  - Removed deprecated test for triton_kernels Tensor functionality
+  - Updated test suite for current codebase
+
+### Compatibility notes
+
+- **Breaking Change**: CLI now uses subcommand structure. Old usage `python run.py <source>` must be updated to `tritonparse parse <source>` or `python run.py parse <source>`.
+- **New Dependencies**: SASS disassembly requires NVIDIA CUDA Binary Utilities (`nvdisasm`). This is optional and only needed if `enable_sass_dump=True`.
+- **Storage**: TensorBlobManager introduces new blob storage directory structure. Default quota is 100GB; configure via `TensorBlobManager` initialization if needed.
+- **Context Manager API**: Enhanced with new parameters. Fully backward compatible with sensible defaults.
+
+### Upgrade guidance
+
+1. **Update CLI commands**: Change `python run.py <source>` to `tritonparse parse <source>` or use the new `tritonparse` command if installed via pip.
+2. **Reproducer usage**: Use `tritonparse reproduce ./parsed_output/trace.ndjson.gz --line <N> --out-dir <output>` to generate standalone kernel scripts.
+3. **SASS disassembly**: Opt-in by setting `TRITONPARSE_DUMP_SASS=1` or passing `enable_sass_dump=True` to `structured_logging.init()`. Requires `nvdisasm` in PATH.
+4. **Tensor storage**: Enable high-fidelity reproduction by using TensorBlobManager (enabled by default when `enable_trace_launch=True`).
+5. **Context manager**: Use enhanced `TritonParseManager` for more control over tracing and parsing behavior.
+
 ## [0.2.3] - 2025-09-19
 
 ### TritonParse Release Notes (last 15 commits)
