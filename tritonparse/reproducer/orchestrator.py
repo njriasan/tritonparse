@@ -77,8 +77,8 @@ def reproduce(
     ret = {
         "kernel_src_path": filepath,
         "kernel": context_bundle.kernel_info.function_name,
-        "repo_script": str(out_py_path.resolve()),
-        "repo_context": str(temp_json_path.resolve()),
+        "repro_script": str(out_py_path.resolve()),
+        "repro_context": str(temp_json_path.resolve()),
     }
     logger.info("REPRODUCER_OUTPUT\n%s", ret)
 
