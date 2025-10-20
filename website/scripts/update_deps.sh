@@ -33,7 +33,7 @@ fi
 for PACKAGE_FILE in "${PACKAGE_FILES[@]}"; do
   PACKAGE_DIR=$(dirname "$PACKAGE_FILE")
   echo "----------------------------------------------"
-  
+
   if [[ "$MAJOR_UPDATE" == true ]]; then
     echo "📦 Updating ALL versions (including major) in: $PACKAGE_DIR"
     pushd "$PACKAGE_DIR" > /dev/null
