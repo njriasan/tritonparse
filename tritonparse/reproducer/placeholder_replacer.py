@@ -2,6 +2,7 @@ from abc import ABC
 
 from typing import Any, Dict, Protocol
 
+from tritonparse.reproducer.function_extractor import extract_utility_functions
 from tritonparse.reproducer.ingestion.ndjson import ContextBundle
 from tritonparse.reproducer.types import KernelImportMode
 from tritonparse.reproducer.utils import (
@@ -82,6 +83,9 @@ class DefaultPlaceholderReplacer(PlaceholderReplacer):
         )
         self.register("# {{KERNEL_SYSPATH_PLACEHOLDER}}", self._replace_kernel_syspath)
         self.register("# {{KERNEL_IMPORT_PLACEHOLDER}}", self._replace_kernel_import)
+        self.register(
+            "# {{UTILITY_FUNCTIONS_PLACEHOLDER}}", self._replace_utility_functions
+        )
         self.register(
             "# {{KERNEL_INVOCATION_PLACEHOLDER}}", self._replace_kernel_invocation
         )
@@ -216,6 +220,13 @@ triton.autotune = _patched_autotune
             return code.replace("# {{KERNEL_IMPORT_PLACEHOLDER}}", comment)
         else:
             raise ValueError(f"Unknown kernel_import mode: {kernel_import}")
+
+    def _replace_utility_functions(
+        self, code: str, context_bundle: ContextBundle, **kwargs
+    ) -> str:
+        """Replace the utility functions placeholder with extracted functions."""
+        utility_code = extract_utility_functions()
+        return code.replace("# {{UTILITY_FUNCTIONS_PLACEHOLDER}}", utility_code)
 
     def _replace_kernel_invocation(
         self, code: str, context_bundle: ContextBundle, **kwargs

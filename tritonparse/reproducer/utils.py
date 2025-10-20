@@ -1,6 +1,7 @@
 import importlib
 import importlib.util
 import json
+import logging
 import sys
 from datetime import datetime
 from functools import lru_cache
@@ -27,9 +28,9 @@ def _get_triton_tensor_types():
     )
 
 
-def create_args_from_json(json_path):
+def create_args_from_json_file(json_path):
     """
-    Parse a reproducer JSON and build kernel grid and argument dictionary.
+    Load and parse a reproducer JSON file.
 
     Args:
         json_path (str): Path to the JSON file describing the kernel launch.
@@ -39,6 +40,19 @@ def create_args_from_json(json_path):
     """
     with open(json_path, "r") as f:
         data = json.load(f)
+    return create_args_from_json(data)
+
+
+def create_args_from_json(data):
+    """
+    Parse a reproducer JSON and build kernel grid and argument dictionary.
+
+    Args:
+        data (dict | list): JSON data describing the kernel launch.
+
+    Returns:
+        tuple[list, dict]: Grid specification list and map of argument name to value.
+    """
     # Handle data format validation and extraction
     if isinstance(data, list):
         if len(data) != 1:
@@ -61,6 +75,192 @@ def create_args_from_json(json_path):
     return grid, args_dict
 
 
+def _apply_stride_and_offset(tensor, shape, stride, storage_offset):
+    """
+    Apply custom stride and storage offset to a tensor if needed.
+
+    Args:
+        tensor: The base contiguous tensor
+        shape: The desired shape
+        stride: The desired stride (or None for contiguous)
+        storage_offset: The desired storage offset
+
+    Returns:
+        torch.Tensor: The strided tensor view or original tensor if contiguous
+    """
+    if stride is None:
+        return tensor
+
+    # Calculate expected contiguous stride
+    expected_contiguous_stride = []
+    s = 1
+    for dim_size in reversed(shape):
+        expected_contiguous_stride.insert(0, s)
+        s *= dim_size
+
+    # If stride matches contiguous stride and no storage offset, return as-is
+    if tuple(stride) == tuple(expected_contiguous_stride) and storage_offset == 0:
+        return tensor
+
+    # Calculate required storage size
+    if len(shape) > 0 and len(stride) > 0:
+        max_offset = storage_offset
+        for dim_stride, dim_size in zip(stride, shape):
+            if dim_size > 0:
+                max_offset += dim_stride * (dim_size - 1)
+        storage_size = max_offset + 1
+    else:
+        storage_size = storage_offset + 1
+
+    # Create larger storage tensor and create strided view
+    storage_tensor = torch.empty(storage_size, dtype=tensor.dtype, device=tensor.device)
+
+    # Create strided view
+    strided_view = storage_tensor.as_strided(
+        size=shape, stride=stride, storage_offset=storage_offset
+    )
+
+    # Copy data from the base tensor into the strided layout
+    strided_view.copy_(tensor.flatten()[: strided_view.numel()].view(shape))
+
+    return strided_view
+
+
+def _create_base_tensor(arg_info) -> torch.Tensor:
+    """
+    Create a base tensor without stride/offset modifications.
+
+    Args:
+        arg_info (dict): Argument information including dtype, shape, device, etc.
+
+    Returns:
+        torch.Tensor: The created base tensor
+    """
+    if arg_info.get("blob_path"):
+        return load_tensor(arg_info.get("blob_path"), arg_info.get("device"))
+
+    # Extract basic tensor properties
+    dtype_str = arg_info.get("dtype")
+    try:
+        torch_dtype = getattr(torch, dtype_str.split(".")[-1])
+    except AttributeError:
+        logging.error(f"Unsupported dtype: {dtype_str}. Defaulting to float32.")
+        torch_dtype = torch.float32
+
+    shape = arg_info.get("shape", [])
+    device = arg_info.get("device", "cpu")
+    # Normalize cuda device to cuda:0
+    if isinstance(device, str) and device.startswith("cuda"):
+        device = "cuda:0"
+
+    # Extract statistical information if available
+    mean = arg_info.get("mean")
+    std = arg_info.get("std")
+    min_val = arg_info.get("min")
+    max_val = arg_info.get("max")
+    has_stats = (
+        mean is not None
+        and std is not None
+        and min_val is not None
+        and max_val is not None
+    )
+
+    if arg_info.get("tensor_capture_error", False):
+        logging.error(
+            f"Error: Tensor '{arg_info.get('name', '')}' had capture error. Generating random tensor instead."
+        )
+
+    # Use a dummy tensor to check properties of the dtype
+    tensor_props = torch.empty(0, dtype=torch_dtype)
+
+    # Case 1: Floating point types
+    if tensor_props.is_floating_point():
+        if has_stats:
+            # Generate tensor with statistical properties matching original data
+            if std == 0 or min_val == max_val:
+                # Constant tensor
+                return torch.full(shape, mean, dtype=torch_dtype, device=device)
+            # Generate normal distribution with mean and std, then clamp to [min, max]
+            tensor = torch.randn(shape, dtype=torch.float32, device=device) * std + mean
+            tensor = torch.clamp(tensor, min=min_val, max=max_val)
+            return tensor.to(torch_dtype)
+        else:
+            # Fallback to original random generation
+            if torch_dtype in [torch.float8_e4m3fn, torch.float8_e5m2]:
+                tmp = torch.rand(shape, dtype=torch.float32, device=device)
+                return tmp.to(torch_dtype)
+            else:
+                return torch.empty(shape, dtype=torch_dtype, device=device).random_()
+
+    # Case 2: Integer types
+    elif torch_dtype in [
+        torch.int8,
+        torch.int16,
+        torch.int32,
+        torch.int64,
+        torch.uint8,
+        torch.bool,
+    ]:
+        if has_stats and torch_dtype != torch.bool:
+            # Generate tensor with statistical properties, then round for integers
+            if std == 0 or min_val == max_val:
+                # Constant tensor
+                return torch.full(shape, int(mean), dtype=torch_dtype, device=device)
+            tensor = torch.randn(shape, dtype=torch.float32, device=device) * std + mean
+            tensor = torch.clamp(tensor, min=min_val, max=max_val)
+            return torch.round(tensor).to(torch_dtype)
+        else:
+            # Fallback to original random generation
+            return torch.empty(shape, dtype=torch_dtype, device=device).random_()
+
+    # Case 3: Complex numbers need special handling
+    elif tensor_props.is_complex():
+        # Complex types: fallback to original logic for now
+        # TODO: Could be improved to use statistical info if available
+        float_dtype = torch.float32 if torch_dtype == torch.complex64 else torch.float64
+        real_part = torch.rand(shape, dtype=float_dtype, device=device)
+        imag_part = torch.rand(shape, dtype=float_dtype, device=device)
+        return torch.complex(real_part, imag_part)
+
+    # Case 4: Handle other unsigned integers (like uint32) which fail with random_()
+    elif "uint" in str(torch_dtype):
+        if has_stats:
+            # Generate tensor with statistical properties for unsigned integers
+            if std == 0 or min_val == max_val:
+                return torch.full(shape, int(mean), dtype=torch_dtype, device=device)
+            tensor = torch.randn(shape, dtype=torch.float32, device=device) * std + mean
+            tensor = torch.clamp(tensor, min=min_val, max=max_val)
+            return torch.round(tensor).to(torch_dtype)
+        else:
+            # Fallback to original random generation
+            return torch.randint(0, 1000, shape, dtype=torch_dtype, device=device)
+
+    # Case 5: If we don't know how to handle the type, raise an error
+    else:
+        raise NotImplementedError(
+            f"Random data generation not implemented for dtype: {torch_dtype}"
+        )
+
+
+def _create_tensor(arg_info) -> torch.Tensor:
+    """
+    Create a tensor with stride and storage offset if needed.
+
+    Args:
+        arg_info (dict): Argument information including dtype, shape, stride, etc.
+
+    Returns:
+        torch.Tensor: The created tensor with applied stride/offset
+    """
+    tensor = _create_base_tensor(arg_info)
+
+    # Apply stride and storage offset if needed
+    shape = arg_info.get("shape", [])
+    stride = arg_info.get("stride")
+    storage_offset = arg_info.get("storage_offset", 0)
+    return _apply_stride_and_offset(tensor, shape, stride, storage_offset)
+
+
 def _create_arg_from_info(arg_info):
     """
     Recursively construct a kernel argument from its JSON schema.
@@ -78,120 +278,14 @@ def _create_arg_from_info(arg_info):
     """
     arg_type = arg_info.get("type")
 
-    if arg_type in ["int", "bool"]:
+    if arg_type == "NoneType":
+        return None
+
+    if arg_type in ["int", "bool", "str", "float"]:
         return arg_info.get("value")
 
     elif arg_type == "tensor":
-        if arg_info.get("blob_path"):
-            return load_tensor(arg_info.get("blob_path"), arg_info.get("device"))
-
-        # Extract basic tensor properties
-        dtype_str = arg_info.get("dtype")
-        try:
-            torch_dtype = getattr(torch, dtype_str.split(".")[-1])
-        except AttributeError:
-            logger.error(f"Unsupported dtype: {dtype_str}. Defaulting to float32.")
-            torch_dtype = torch.float32
-
-        shape = arg_info.get("shape", [])
-        device = arg_info.get("device", "cpu")
-
-        # Extract statistical information if available
-        mean = arg_info.get("mean")
-        std = arg_info.get("std")
-        min_val = arg_info.get("min")
-        max_val = arg_info.get("max")
-        has_stats = (
-            mean is not None
-            and std is not None
-            and min_val is not None
-            and max_val is not None
-        )
-
-        # Use a dummy tensor to check properties of the dtype
-        tensor_props = torch.empty(0, dtype=torch_dtype)
-
-        # Case 1: Floating point types
-        if tensor_props.is_floating_point():
-            if has_stats:
-                # Generate tensor with statistical properties matching original data
-                if std == 0 or min_val == max_val:
-                    # Constant tensor
-                    return torch.full(shape, mean, dtype=torch_dtype, device=device)
-                # Generate normal distribution with mean and std, then clamp to [min, max]
-                tensor = (
-                    torch.randn(shape, dtype=torch.float32, device=device) * std + mean
-                )
-                tensor = torch.clamp(tensor, min=min_val, max=max_val)
-                return tensor.to(torch_dtype)
-            else:
-                # Fallback to original random generation
-                if torch_dtype in [torch.float8_e4m3fn, torch.float8_e5m2]:
-                    tmp = torch.rand(shape, dtype=torch.float32, device=device)
-                    return tmp.to(torch_dtype)
-                else:
-                    return torch.empty(
-                        shape, dtype=torch_dtype, device=device
-                    ).random_()
-
-        # Case 2: Integer types
-        elif torch_dtype in [
-            torch.int8,
-            torch.int16,
-            torch.int32,
-            torch.int64,
-            torch.uint8,
-            torch.bool,
-        ]:
-            if has_stats and torch_dtype != torch.bool:
-                # Generate tensor with statistical properties, then round for integers
-                if std == 0 or min_val == max_val:
-                    # Constant tensor
-                    return torch.full(
-                        shape, int(mean), dtype=torch_dtype, device=device
-                    )
-                tensor = (
-                    torch.randn(shape, dtype=torch.float32, device=device) * std + mean
-                )
-                tensor = torch.clamp(tensor, min=min_val, max=max_val)
-                return torch.round(tensor).to(torch_dtype)
-            else:
-                # Fallback to original random generation
-                return torch.empty(shape, dtype=torch_dtype, device=device).random_()
-
-        # Case 3: Complex numbers need special handling
-        elif tensor_props.is_complex():
-            # Complex types: fallback to original logic for now
-            # TODO: Could be improved to use statistical info if available
-            float_dtype = (
-                torch.float32 if torch_dtype == torch.complex64 else torch.float64
-            )
-            real_part = torch.rand(shape, dtype=float_dtype, device=device)
-            imag_part = torch.rand(shape, dtype=float_dtype, device=device)
-            return torch.complex(real_part, imag_part)
-
-        # Case 4: Handle other unsigned integers (like uint32) which fail with random_()
-        elif "uint" in str(torch_dtype):
-            if has_stats:
-                # Generate tensor with statistical properties for unsigned integers
-                if std == 0 or min_val == max_val:
-                    return torch.full(
-                        shape, int(mean), dtype=torch_dtype, device=device
-                    )
-                tensor = (
-                    torch.randn(shape, dtype=torch.float32, device=device) * std + mean
-                )
-                tensor = torch.clamp(tensor, min=min_val, max=max_val)
-                return torch.round(tensor).to(torch_dtype)
-            else:
-                # Fallback to original random generation
-                return torch.randint(0, 1000, shape, dtype=torch_dtype, device=device)
-
-        # Case 5: If we don't know how to handle the type, raise an error
-        else:
-            raise NotImplementedError(
-                f"Random data generation not implemented for dtype: {torch_dtype}"
-            )
+        return _create_tensor(arg_info)
 
     elif arg_type == "triton_kernels.tensor.Tensor":
         if not TRITON_KERNELS_CUSTOM_TYPES:
