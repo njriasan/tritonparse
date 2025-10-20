@@ -88,11 +88,9 @@ def _parse_source_file(file_path: Path) -> tuple[ast.Module, list[str]]:
     """
     try:
         source_code = file_path.read_text(encoding="utf-8")
+        tree = ast.parse(source_code, filename=str(file_path))
     except FileNotFoundError as e:
         raise FileNotFoundError(f"Source file not found: {file_path}") from e
-
-    try:
-        tree = ast.parse(source_code, filename=str(file_path))
     except SyntaxError as e:
         raise SyntaxError(f"Failed to parse {file_path}: {e}") from e
 
