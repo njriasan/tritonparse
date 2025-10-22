@@ -25,9 +25,9 @@ def is_fbcode():
 
 
 if is_fbcode():
-    from tritonparse.fb.source_type import SourceType
+    from .fb.source_type import SourceType
 else:
-    from tritonparse.source_type import SourceType
+    from .source_type import SourceType
 
 
 class Rank:

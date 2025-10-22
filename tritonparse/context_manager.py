@@ -2,10 +2,10 @@ import os
 import shutil
 import tempfile
 
-from tritonparse.shared_vars import TEST_KEEP_OUTPUT
+from .shared_vars import TEST_KEEP_OUTPUT
 
-from tritonparse.structured_logging import clear_logging_config, init
-from tritonparse.utils import unified_parse
+from .structured_logging import clear_logging_config, init
+from .utils import unified_parse
 
 
 def createUniqueTempDirectory():
