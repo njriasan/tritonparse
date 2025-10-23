@@ -6,6 +6,7 @@ from collections import defaultdict
 from typing import Any, Dict, List
 
 from .event_diff import _generate_launch_diff
+from .ir_analysis import _generate_ir_analysis
 
 from .ir_parser import (
     extract_code_locations,
@@ -13,7 +14,7 @@ from .ir_parser import (
     extract_ptx_amdgcn_mappings,
 )
 from .mapper import create_bidirectional_mapping, create_python_mapping
-from .sourcemap_utils import get_file_extension
+from .sourcemap_utils import get_file_extension, load_ir_contents
 
 logger = logging.getLogger("SourceMapping")
 
@@ -84,19 +85,9 @@ def process_ir(
     file_path: Dict[str, str],
     other_mappings: List[Any] = None,
 ):
-    # Generate source mappings for each IR type
-    # the key should be the full file name with extension for the IR files
-    if not key:
-        return {}
-    logger.debug(f"Processing {key}")
-    ir_content = file_content.get(key, None)
+    ir_content = load_ir_contents(key, file_content, file_path)
     if not ir_content:
-        ir_file_path = file_path.get(key, None)
-        if not ir_file_path:
-            logger.warning(f"No content found for {key}")
-            return {}
-        with open(ir_file_path, "r") as f:
-            ir_content = f.read()
+        return {}
     mapping = generate_source_mappings(ir_content, key.split(".")[1], other_mappings)
     logger.debug(f"Generated source mapping for {key}")
     return mapping
@@ -306,6 +297,13 @@ def parse_single_file(
             all_output_lines[output_file].append(
                 json.dumps(launch_event, separators=(",", ":")) + "\n"
             )
+
+        if compilation_event:
+            ir_analysis_event = _generate_ir_analysis(compilation_event)
+            if ir_analysis_event:
+                all_output_lines[output_file].append(
+                    json.dumps(ir_analysis_event, separators=(",", ":")) + "\n"
+                )
 
         if compilation_event and launches_with_indices:
             sames, diffs, launch_index_map = _generate_launch_diff(
