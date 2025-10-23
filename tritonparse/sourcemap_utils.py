@@ -1,4 +1,7 @@
+import logging
 from typing import Any, Dict, List
+
+logger = logging.getLogger("SourceMapping")
 
 
 def get_file_extension(filename: str) -> str:
@@ -70,3 +73,22 @@ def _to_ranges(indices: List[int]) -> List[Dict[str, int]]:
 
     ranges.append({"start": start, "end": end})
     return ranges
+
+
+def load_ir_contents(
+    key: str,
+    file_content: dict[str, str],
+    file_path: dict[str, str],
+):
+    if not key:
+        return {}
+    logger.debug(f"Processing {key}")
+    ir_content = file_content.get(key, None)
+    if not ir_content:
+        ir_file_path = file_path.get(key, None)
+        if not ir_file_path:
+            logger.warning(f"No content found for {key}")
+            return {}
+        with open(ir_file_path, "r") as f:
+            ir_content = f.read()
+    return ir_content
