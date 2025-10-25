@@ -300,14 +300,14 @@ def parse_single_file(
 
         if compilation_event:
             ir_analysis = _generate_ir_analysis(compilation_event)
-            if ir_analysis_event:
+            if ir_analysis:
                 ir_analysis_event = {
                     "event_type": "ir_analysis",
                     "hash": _kernel_hash,
                     "ir_analysis": ir_analysis,
                 }
-                    all_output_lines[output_file].append(
-                        json.dumps(ir_analysis_event, separators=(",", ":")) + "\n"
+                all_output_lines[output_file].append(
+                    json.dumps(ir_analysis_event, separators=(",", ":")) + "\n"
                 )
 
         if compilation_event and launches_with_indices:
