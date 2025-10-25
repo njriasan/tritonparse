@@ -23,9 +23,10 @@ const IRAnalysis: React.FC<IRAnalysisProps> = ({ kernels, selectedKernel }) => {
       </div>
     );
   }
-  const io_counts = kernel.ir_analysis!.io_counts
-  const ttgir_info = kernel.ir_analysis!.io_counts!["amd_ttgir_bufferops_count"];
-  const amdgcn_info = kernel.ir_analysis!.io_counts!["amd_gcn_bufferops_count"];
+
+  const io_counts = kernel.ir_analysis?.io_counts;
+  const ttgir_info = io_counts?.["amd_ttgir_bufferops_count"];
+  const amdgcn_info = io_counts?.["amd_gcn_bufferops_count"];
 
   return (
     <div className="p-6">
@@ -36,36 +37,58 @@ const IRAnalysis: React.FC<IRAnalysisProps> = ({ kernels, selectedKernel }) => {
           Kernel: {kernel.name}
         </h2>
 
-        <h3 className="text-lg font-medium mb-3 text-gray-800">
-          AMD BufferOps Information:
-        </h3>
+        {io_counts && (ttgir_info || amdgcn_info) && (
+          <>
+            <h3 className="text-lg font-medium mb-3 text-gray-800">
+              AMD BufferOps Information
+            </h3>
 
-        <div className="bg-gray-50 p-4 rounded-md border border-gray-200">
-          <p className="text-sm text-gray-700">
-            Tiled Buffer Load Count: {ttgir_info["tt.load_count"]}
-          </p>
-          <p className="text-sm text-gray-700">
-            Tiled Buffer Store Count: {ttgir_info["tt.store_count"]}
-          </p>
-          <p className="text-sm text-gray-700">
-            Tiled Global Load Count: {ttgir_info["amdgpu.buffer_load_count"]}
-          </p>
-          <p className="text-sm text-gray-700">
-            Tiled Global Store Count:{ttgir_info["amdgpu.buffer_store_count"]}
-          </p>
-          <p className="text-sm text-gray-700">
-            AMDGCN Buffer Load Instruction Count: {amdgcn_info["global_load_count"]}
-          </p>
-          <p className="text-sm text-gray-700">
-            AMDGCN Buffer Store Instruction Count: {amdgcn_info["global_store_count"]}
-          </p>
-          <p className="text-sm text-gray-700">
-            AMDGCN Global Load Instruction Count: {amdgcn_info["buffer_load_count"]}
-          </p>
-          <p className="text-sm text-gray-700">
-            AMDGCN Global Store Instruction Count: {amdgcn_info["buffer_store_count"]}
-          </p>
-        </div>
+            <div className="bg-gray-50 p-4 rounded-md border border-gray-200">
+              <div className="grid grid-cols-[repeat(auto-fit,_minmax(180px,_1fr))] gap-3">
+                {ttgir_info && (
+                  <>
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium text-gray-500">Tiled Buffer Load Count</span>
+                      <span className="font-mono text-sm break-words">{ttgir_info["tt.load_count"] ?? "NaN"}</span>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium text-gray-500">Tiled Buffer Store Count</span>
+                      <span className="font-mono text-sm break-words">{ttgir_info["tt.store_count"] ?? "NaN"}</span>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium text-gray-500">Tiled Global Load Count</span>
+                      <span className="font-mono text-sm break-words">{ttgir_info["amdgpu.buffer_load_count"] ?? "NaN"}</span>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium text-gray-500">Tiled Global Store Count</span>
+                      <span className="font-mono text-sm break-words">{ttgir_info["amdgpu.buffer_store_count"] ?? "NaN"}</span>
+                    </div>
+                  </>
+                )}
+                {amdgcn_info && (
+                  <>
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium text-gray-500">AMDGCN Buffer Load Instruction Count</span>
+                      <span className="font-mono text-sm break-words">{amdgcn_info["global_load_count"] ?? "NaN"}</span>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium text-gray-500">AMDGCN Buffer Store Instruction Count</span>
+                      <span className="font-mono text-sm break-words">{amdgcn_info["global_store_count"] ?? "NaN"}</span>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium text-gray-500">AMDGCN Global Load Instruction Count</span>
+                      <span className="font-mono text-sm break-words">{amdgcn_info["buffer_load_count"] ?? "NaN"}</span>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium text-gray-500">AMDGCN Global Store Instruction Count</span>
+                      <span className="font-mono text-sm break-words">{amdgcn_info["buffer_store_count"] ?? "NaN"}</span>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
