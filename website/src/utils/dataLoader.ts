@@ -167,6 +167,11 @@ export interface CompilationMetadata {
     [key: string]: any; // Allow additional unknown fields
 }
 
+export interface IRAnalysisData {
+    // Mapping from IR stage -> <IO type -> count>
+    io_counts?: Record<string, Record<string, number>>;
+}
+
 /**
  * Extracted argument information
  */
@@ -224,6 +229,7 @@ export interface LogEntry {
     launch_index_map?: LaunchRange[];
     diffs?: LaunchDiffData;
     sames?: LaunchSamesData;
+    ir_analysis?: IRAnalysisData; // Stored IR Analysis information.
 }
 
 /**
@@ -239,6 +245,7 @@ export interface ProcessedKernel {
     pythonSourceInfo?: PythonSourceCodeInfo; // Python source code information
     metadata?: KernelMetadata; // Compilation metadata
     launchDiff?: LogEntry; // Aggregated launch event differences
+    ir_analysis?: IRAnalysisData; // Stored IR Analysis information.
 }
 
 /**
@@ -501,6 +508,15 @@ export function processKernelData(logEntries: LogEntry[]): ProcessedKernel[] {
                 kernel.launchDiff = entry; // Attach the entire event object
             } else {
                 console.warn(`Could not find matching kernel for launch_diff hash: ${hash}`);
+            }
+        }
+        if (entry.event_type === "ir_analysis") {
+            const hash = entry.hash;
+            if (hash && kernelsByHash.has(hash)) {
+                const kernel = kernelsByHash.get(hash)!;
+                kernel.ir_analysis = entry.ir_analysis!; // Attach the ir_analysis
+            } else {
+                console.warn(`Could not find matching kernel for ir_analysis hash: ${hash}`);
             }
         }
     }

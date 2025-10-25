@@ -6,34 +6,6 @@ interface IRAnalysisProps {
   selectedKernel: number;
 }
 
-const formatMetadataValue = (value: any): string => {
-  if (value === null) {
-    return "null";
-  }
-  if (typeof value === "boolean") {
-    return value ? "true" : "false";
-  }
-  if (Array.isArray(value)) {
-    return JSON.stringify(value);
-  }
-  if (typeof value === "object") {
-    return JSON.stringify(value);
-  }
-  return String(value);
-};
-
-interface MetadataItemProps {
-  label: string;
-  value: React.ReactNode;
-}
-
-const MetadataItem: React.FC<MetadataItemProps> = ({ label, value }) => (
-  <div className="flex flex-col">
-    <span className="text-sm font-medium text-gray-500">{label}</span>
-    <span className="font-mono text-sm break-words">{value}</span>
-  </div>
-);
-
 const IRAnalysis: React.FC<IRAnalysisProps> = ({ kernels, selectedKernel }) => {
   if (kernels.length === 0) {
     return (
@@ -44,6 +16,16 @@ const IRAnalysis: React.FC<IRAnalysisProps> = ({ kernels, selectedKernel }) => {
   }
 
   const kernel = kernels[selectedKernel];
+  if (kernel.ir_analysis === null) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-gray-800">No IR Analysis available</div>
+      </div>
+    );
+  }
+  const io_counts = kernel.ir_analysis!.io_counts
+  const ttgir_info = kernel.ir_analysis!.io_counts!["amd_ttgir_bufferops_count"];
+  const amdgcn_info = kernel.ir_analysis!.io_counts!["amd_gcn_bufferops_count"];
 
   return (
     <div className="p-6">
@@ -54,17 +36,34 @@ const IRAnalysis: React.FC<IRAnalysisProps> = ({ kernels, selectedKernel }) => {
           Kernel: {kernel.name}
         </h2>
 
-        <div className="mb-6">
-          <p className="text-gray-600 mb-4">
-            The IR analysis provides helpful insights into important kernel properties
-            that were derived from the IR.
-          </p>
-        </div>
+        <h3 className="text-lg font-medium mb-3 text-gray-800">
+          AMD BufferOps Information:
+        </h3>
 
         <div className="bg-gray-50 p-4 rounded-md border border-gray-200">
           <p className="text-sm text-gray-700">
-            IR analysis data will be displayed here when available in the
-            kernel data structure.
+            Tiled Buffer Load Count: {ttgir_info["tt.load_count"]}
+          </p>
+          <p className="text-sm text-gray-700">
+            Tiled Buffer Store Count: {ttgir_info["tt.store_count"]}
+          </p>
+          <p className="text-sm text-gray-700">
+            Tiled Global Load Count: {ttgir_info["amdgpu.buffer_load_count"]}
+          </p>
+          <p className="text-sm text-gray-700">
+            Tiled Global Store Count:{ttgir_info["amdgpu.buffer_store_count"]}
+          </p>
+          <p className="text-sm text-gray-700">
+            AMDGCN Buffer Load Instruction Count: {amdgcn_info["global_load_count"]}
+          </p>
+          <p className="text-sm text-gray-700">
+            AMDGCN Buffer Store Instruction Count: {amdgcn_info["global_store_count"]}
+          </p>
+          <p className="text-sm text-gray-700">
+            AMDGCN Global Load Instruction Count: {amdgcn_info["buffer_load_count"]}
+          </p>
+          <p className="text-sm text-gray-700">
+            AMDGCN Global Store Instruction Count: {amdgcn_info["buffer_store_count"]}
           </p>
         </div>
       </div>
