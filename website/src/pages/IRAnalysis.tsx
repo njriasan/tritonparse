@@ -27,6 +27,7 @@ const IRAnalysis: React.FC<IRAnalysisProps> = ({ kernels, selectedKernel }) => {
   const io_counts = kernel.ir_analysis?.io_counts;
   const ttgir_info = io_counts?.["amd_ttgir_bufferops_count"];
   const amdgcn_info = io_counts?.["amd_gcn_bufferops_count"];
+  const getCount = (info: Record<string, number> | undefined, key: string): string => { return info?.[key]?.toString() ?? "N/A"; };
 
   return (
     <div className="p-6">
@@ -49,39 +50,39 @@ const IRAnalysis: React.FC<IRAnalysisProps> = ({ kernels, selectedKernel }) => {
                   <>
                     <div className="flex flex-col">
                       <span className="text-sm font-medium text-gray-500">Tiled Buffer Load Count</span>
-                      <span className="font-mono text-sm break-words">{ttgir_info["tt.load_count"] ?? "NaN"}</span>
+                      <span className="font-mono text-sm break-words">{getCount(ttgir_info, "tt.load_count")}</span>
                     </div>
                     <div className="flex flex-col">
                       <span className="text-sm font-medium text-gray-500">Tiled Buffer Store Count</span>
-                      <span className="font-mono text-sm break-words">{ttgir_info["tt.store_count"] ?? "NaN"}</span>
+                      <span className="font-mono text-sm break-words">{getCount(ttgir_info, "tt.store_count")}</span>
                     </div>
                     <div className="flex flex-col">
                       <span className="text-sm font-medium text-gray-500">Tiled Global Load Count</span>
-                      <span className="font-mono text-sm break-words">{ttgir_info["amdgpu.buffer_load_count"] ?? "NaN"}</span>
+                      <span className="font-mono text-sm break-words">{getCount(ttgir_info, "amdgpu.buffer_load_count")}</span>
                     </div>
                     <div className="flex flex-col">
                       <span className="text-sm font-medium text-gray-500">Tiled Global Store Count</span>
-                      <span className="font-mono text-sm break-words">{ttgir_info["amdgpu.buffer_store_count"] ?? "NaN"}</span>
+                      <span className="font-mono text-sm break-words">{getCount(ttgir_info, "amdgpu.buffer_store_count")}</span>
                     </div>
                   </>
                 )}
                 {amdgcn_info && (
                   <>
                     <div className="flex flex-col">
-                      <span className="text-sm font-medium text-gray-500">AMDGCN Buffer Load Instruction Count</span>
-                      <span className="font-mono text-sm break-words">{amdgcn_info["global_load_count"] ?? "NaN"}</span>
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="text-sm font-medium text-gray-500">AMDGCN Buffer Store Instruction Count</span>
-                      <span className="font-mono text-sm break-words">{amdgcn_info["global_store_count"] ?? "NaN"}</span>
-                    </div>
-                    <div className="flex flex-col">
                       <span className="text-sm font-medium text-gray-500">AMDGCN Global Load Instruction Count</span>
-                      <span className="font-mono text-sm break-words">{amdgcn_info["buffer_load_count"] ?? "NaN"}</span>
+                      <span className="font-mono text-sm break-words">{getCount(amdgcn_info, "global_load_count")}</span>
                     </div>
                     <div className="flex flex-col">
                       <span className="text-sm font-medium text-gray-500">AMDGCN Global Store Instruction Count</span>
-                      <span className="font-mono text-sm break-words">{amdgcn_info["buffer_store_count"] ?? "NaN"}</span>
+                      <span className="font-mono text-sm break-words">{getCount(amdgcn_info, "global_store_count")}</span>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium text-gray-500">AMDGCN Buffer Load Instruction Count</span>
+                      <span className="font-mono text-sm break-words">{getCount(amdgcn_info, "buffer_load_count")}</span>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium text-gray-500">AMDGCN Buffer Store Instruction Count</span>
+                      <span className="font-mono text-sm break-words">{getCount(amdgcn_info, "buffer_store_count")}</span>
                     </div>
                   </>
                 )}
