@@ -42,7 +42,7 @@ def process_amd_gcn_bufferops(
 ) -> dict[str, int]:
     ir_content = load_ir_contents(key, file_content, file_path)
     # TODO: Add atomics
-    io_keys = ["global_load_", "global_store_", "buffer_load_", "buffer_store_"]
+    io_keys = ["global_load", "global_store", "buffer_load", "buffer_store"]
     return process_amd_bufferop(ir_content, io_keys)
 
 
@@ -66,9 +66,12 @@ def _generate_ir_analysis(entry: str):
         gcn_bufferops_info = process_amd_gcn_bufferops(
             amdgcn_key, file_content, file_path
         )
+        io_counts = {}
         # NDJSON format requires a newline at the end of each line
         if ttgir_bufferops_info:
-            ir_analysis["amd_ttgir_bufferops_count"] = ttgir_bufferops_info
+            io_counts["amd_ttgir_bufferops_count"] = ttgir_bufferops_info
         if gcn_bufferops_info:
-            ir_analysis["amd_gcn_bufferops_count"] = gcn_bufferops_info
-    return {"ir_analysis": ir_analysis}
+            io_counts["amd_gcn_bufferops_count"] = gcn_bufferops_info
+        if io_counts:
+            ir_analysis["io_counts"] = io_counts
+    return ir_analysis
