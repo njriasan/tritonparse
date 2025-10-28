@@ -46,3 +46,8 @@ def _add_reproducer_args(parser: argparse.ArgumentParser) -> None:
             "Defaults to 'default'."
         ),
     )
+    parser.add_argument(
+        "--use-fbcode",
+        action="store_true",
+        help=("Use fbcode to setup repro environment."),
+    )

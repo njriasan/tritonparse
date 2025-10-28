@@ -327,7 +327,7 @@ def _create_arg_from_info(arg_info):
         return None
 
 
-def determine_output_paths(out_dir: str, kernel_name: str):
+def determine_output_paths(out_dir: str, kernel_name: str, template: str):
     """
     Determine output file paths for reproducer script and context data.
 
@@ -342,7 +342,12 @@ def determine_output_paths(out_dir: str, kernel_name: str):
     output_directory = Path(out_dir) / kernel_name
     output_directory.mkdir(parents=True, exist_ok=True)
 
-    out_py_path = output_directory / f"repro_{timestamp}.py"
+    filename_parts = ["repro"]
+    if template != "example":
+        filename_parts.append(template.replace(".", "_"))
+    filename_parts.append(timestamp)
+    filename = "_".join(filename_parts) + ".py"
+    out_py_path = output_directory / filename
     temp_json_path = output_directory / f"repro_context_{timestamp}.json"
 
     return out_py_path, temp_json_path
