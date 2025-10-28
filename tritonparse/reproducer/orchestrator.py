@@ -23,7 +23,7 @@ def reproduce(
     template: str,
     replacer: Optional[PlaceholderReplacer] = None,
     kernel_import: KernelImportMode = KernelImportMode.DEFAULT,
-) -> dict[str, Path]:
+) -> dict[str, str]:
     """
     Generate a reproducer script from NDJSON trace file.
 
