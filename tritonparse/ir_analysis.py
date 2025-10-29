@@ -84,11 +84,11 @@ def find_loop_bounds(ir_content: str) -> list[tuple[int, int]]:
             elif char == "}":
                 current_brace_count -= 1
 
-                # Check if we've closed any loops
-                while loop_stack and current_brace_count <= loop_stack[-1][1]:
-                    start_line, _start_brace_count = loop_stack.pop()
-                    # The loop ends at this line
-                    loop_bounds.append((start_line, line_idx))
+        # Check if we've closed any loops
+        while loop_stack and current_brace_count <= loop_stack[-1][1]:
+            start_line, _start_brace_count = loop_stack.pop()
+            # The loop ends at this line
+            loop_bounds.append((start_line, line_idx))
 
     return loop_bounds
 
@@ -137,6 +137,7 @@ def find_loop_pipelining(
     ttgir_content: str,
     ttir_loop_start: int,
     ttir_loop_end: int,
+    loop_index: int,
     ttir_to_ttgir_mapping: dict[str, dict],
     ttgir_to_source_mapping: dict[str, dict],
     python_source_content: str | None,
@@ -222,7 +223,7 @@ def find_loop_pipelining(
 
     # Use the first inner loop as the reference
     # TODO: Implement more sophisticated mapping logic to match TTIR loops to TTGIR loops
-    ttgir_loop_start, ttgir_loop_end = ttgir_inner_loops[0]
+    ttgir_loop_start, ttgir_loop_end = ttgir_inner_loops[loop_index]
 
     # Step 3: Map TTIR operations to TTGIR operations using source mappings
     # and categorize them by their position relative to the TTGIR loop
@@ -353,12 +354,13 @@ def generate_loop_schedule(
 
     # For each inner loop, find pipelining information
     loop_schedules = []
-    for loop_start, loop_end in inner_loop_bounds:
+    for i, (loop_start, loop_end) in enumerate(inner_loop_bounds):
         pipelining_info = find_loop_pipelining(
             ttir_content,
             ttgir_content,
             loop_start,
             loop_end,
+            i,
             ttir_to_ttgir_mapping,
             ttgir_to_source_mapping,
             python_source_content,
