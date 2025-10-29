@@ -182,15 +182,31 @@ def find_loop_pipelining(
     ttgir_lines = ttgir_content.split("\n")
     python_lines = python_source_content.split("\n") if python_source_content else []
 
+    def apply_trailing_space(op: str) -> str:
+        """
+        Add a trailing space to all ops to avoid false positives like
+        warp_group_dot and warp_group_dot_wait.
+        """
+        return op + " "
+
     # Step 1: Find tt.load and tt.dot operations in TTIR loop
-    ttir_operations: list[tuple[str, int]] = []
+    ttir_lines: list[int] = []
+    pipeline_tt_ops = ["tt.load", "tt.dot"]
+    pipeline_tt_ops = [apply_trailing_space(op) for op in pipeline_tt_ops]
+    pipeline_ttgir_ops = [
+        "tt.load",
+        "tt.dot",
+        "async_copy_global_to_local",
+        "warp_group_dot",
+    ]
+    pipeline_ttgir_ops = [apply_trailing_space(op) for op in pipeline_ttgir_ops]
 
     for line_idx in range(ttir_loop_start, min(ttir_loop_end + 1, len(ttir_lines))):
         line = ttir_lines[line_idx]
-        if "tt.load" in line:
-            ttir_operations.append(("tt.load", line_idx))
-        if "tt.dot" in line:
-            ttir_operations.append(("tt.dot", line_idx))
+        for op in pipeline_tt_ops:
+            if op in line:
+                ttir_lines.append(line_idx)
+                break
 
     # Step 2: Find the corresponding loop in TTGIR using source mappings
     # Map the TTIR loop bounds to TTGIR using source mappings
@@ -215,7 +231,7 @@ def find_loop_pipelining(
     loop_body_ops: list[tuple[int, str]] = []
     epilogue_ops: list[tuple[int, str]] = []
 
-    for op_type, ttir_line in ttir_operations:
+    for ttir_line in ttir_lines:
         # Convert 0-indexed line to 1-indexed string key for mapping lookup
         ttir_line_key = str(ttir_line + 1)
 
@@ -234,14 +250,8 @@ def find_loop_pipelining(
                 if ttgir_line_idx < len(ttgir_lines):
                     ttgir_source_line = ttgir_lines[ttgir_line_idx].strip()
 
-                    # Only keep lines with specific operations
-                    relevant_ops = [
-                        "tt.load",
-                        "tt.dot",
-                        "async_copy_global_to_local",
-                        "warp_group_dot",
-                    ]
-                    if any(op in ttgir_source_line for op in relevant_ops):
+                    # Only keep mappings to the "compute" op.
+                    if any(op in ttgir_source_line for op in pipeline_ttgir_ops):
                         # Map TTGIR line back to Python source
                         ttgir_line_key = str(ttgir_line)
                         python_source_line = ttgir_source_line  # Default to TTGIR line
