@@ -14,7 +14,7 @@ import torch
 # {{UTILITY_FUNCTIONS_PLACEHOLDER}}
 
 
-if __name__ == "__main__":
+def launch_kernel():
     script_dir = Path(__file__).resolve().parent  # noqa: F821
     json_file = script_dir / "{{JSON_FILE_NAME_PLACEHOLDER}}"
     grid, args_dict = create_args_from_json_file(str(json_file))  # noqa: F821
@@ -28,3 +28,7 @@ if __name__ == "__main__":
 
     torch.cuda.synchronize()
     print("Kernel execution finished.")
+
+
+if __name__ == "__main__":
+    launch_kernel()

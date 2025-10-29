@@ -76,21 +76,39 @@ class DefaultPlaceholderReplacer(PlaceholderReplacer):
     - # {{KERNEL_INVOCATION_PLACEHOLDER}}: Replaced with kernel invocation code
     """
 
+    KERNEL_NAME_PLACEHOLDER = "{{KERNEL_NAME_PLACEHOLDER}}"
+    JSON_FILE_NAME_PLACEHOLDER = "{{JSON_FILE_NAME_PLACEHOLDER}}"
+    IR_OVERRIDE_SETUP_PLACEHOLDER = "# {{IR_OVERRIDE_SETUP_PLACEHOLDER}}"
+    KERNEL_SYSPATH_PLACEHOLDER = "# {{KERNEL_SYSPATH_PLACEHOLDER}}"
+    KERNEL_IMPORT_PLACEHOLDER = "# {{KERNEL_IMPORT_PLACEHOLDER}}"
+    UTILITY_FUNCTIONS_PLACEHOLDER = "# {{UTILITY_FUNCTIONS_PLACEHOLDER}}"
+    KERNEL_INVOCATION_PLACEHOLDER = "# {{KERNEL_INVOCATION_PLACEHOLDER}}"
+
     def __init__(self):
         super().__init__()
         # Register all default handlers
-        self.register("{{JSON_FILE_NAME_PLACEHOLDER}}", self._replace_json_filename)
+        self.register(self.JSON_FILE_NAME_PLACEHOLDER, self._replace_json_filename)
         self.register(
-            "# {{IR_OVERRIDE_SETUP_PLACEHOLDER}}", self._replace_ir_override_setup
+            self.IR_OVERRIDE_SETUP_PLACEHOLDER, self._replace_ir_override_setup
         )
-        self.register("# {{KERNEL_SYSPATH_PLACEHOLDER}}", self._replace_kernel_syspath)
-        self.register("# {{KERNEL_IMPORT_PLACEHOLDER}}", self._replace_kernel_import)
+        self.register(self.KERNEL_SYSPATH_PLACEHOLDER, self._replace_kernel_syspath)
+        self.register(self.KERNEL_IMPORT_PLACEHOLDER, self._replace_kernel_import)
         self.register(
-            "# {{UTILITY_FUNCTIONS_PLACEHOLDER}}", self._replace_utility_functions
+            self.UTILITY_FUNCTIONS_PLACEHOLDER, self._replace_utility_functions
         )
         self.register(
-            "# {{KERNEL_INVOCATION_PLACEHOLDER}}", self._replace_kernel_invocation
+            self.KERNEL_INVOCATION_PLACEHOLDER, self._replace_kernel_invocation
         )
+        self.register(self.KERNEL_NAME_PLACEHOLDER, self._replace_kernel_name)
+
+    def _replace_kernel_name(
+        self, code: str, context_bundle: ContextBundle, **kwargs
+    ) -> str:
+        """Replace the kernel name placeholder."""
+        kernel_name = context_bundle.kernel_info.function_name
+        if not kernel_name:
+            raise ValueError("Kernel function name is not available")
+        return code.replace(self.KERNEL_NAME_PLACEHOLDER, kernel_name)
 
     def _replace_json_filename(
         self, code: str, context_bundle: ContextBundle, **kwargs
@@ -99,7 +117,7 @@ class DefaultPlaceholderReplacer(PlaceholderReplacer):
         temp_json_path = kwargs.get("temp_json_path")
         if temp_json_path is None:
             raise ValueError("temp_json_path is required for JSON filename replacement")
-        return code.replace("{{JSON_FILE_NAME_PLACEHOLDER}}", temp_json_path.name)
+        return code.replace(self.JSON_FILE_NAME_PLACEHOLDER, temp_json_path.name)
 
     def _replace_ir_override_setup(
         self, code: str, context_bundle: ContextBundle, **kwargs
@@ -108,7 +126,7 @@ class DefaultPlaceholderReplacer(PlaceholderReplacer):
         kernel_import = kwargs.get("kernel_import", KernelImportMode.DEFAULT)
 
         if kernel_import != KernelImportMode.OVERRIDE_TTIR:
-            return code.replace("# {{IR_OVERRIDE_SETUP_PLACEHOLDER}}", "")
+            return code.replace(self.IR_OVERRIDE_SETUP_PLACEHOLDER, "")
 
         comp_json_filename = kwargs.get("comp_json_filename")
         if not comp_json_filename:
@@ -158,7 +176,7 @@ _original_autotune = triton.autotune
 triton.autotune = _patched_autotune
 '''
 
-        return code.replace("# {{IR_OVERRIDE_SETUP_PLACEHOLDER}}", setup_code)
+        return code.replace(self.IR_OVERRIDE_SETUP_PLACEHOLDER, setup_code)
 
     def _replace_kernel_syspath(
         self, code: str, context_bundle: ContextBundle, **kwargs
@@ -168,15 +186,15 @@ triton.autotune = _patched_autotune
 
         if kernel_import == KernelImportMode.DEFAULT:
             sys_stmt, _ = _generate_import_statements(context_bundle.kernel_info)
-            return code.replace("# {{KERNEL_SYSPATH_PLACEHOLDER}}", sys_stmt)
+            return code.replace(self.KERNEL_SYSPATH_PLACEHOLDER, sys_stmt)
         elif kernel_import == KernelImportMode.COPY:
             comment = (
                 "# Kernel sys.path setup skipped - kernel source code embedded below"
             )
-            return code.replace("# {{KERNEL_SYSPATH_PLACEHOLDER}}", comment)
+            return code.replace(self.KERNEL_SYSPATH_PLACEHOLDER, comment)
         elif kernel_import == KernelImportMode.OVERRIDE_TTIR:
             comment = "# Kernel sys.path setup skipped - using IR override mode"
-            return code.replace("# {{KERNEL_SYSPATH_PLACEHOLDER}}", comment)
+            return code.replace(self.KERNEL_SYSPATH_PLACEHOLDER, comment)
         else:
             raise ValueError(f"Unknown kernel_import mode: {kernel_import}")
 
@@ -190,7 +208,7 @@ triton.autotune = _patched_autotune
             _, import_statement = _generate_import_statements(
                 context_bundle.kernel_info
             )
-            return code.replace("# {{KERNEL_IMPORT_PLACEHOLDER}}", import_statement)
+            return code.replace(self.KERNEL_IMPORT_PLACEHOLDER, import_statement)
         elif kernel_import == KernelImportMode.COPY:
             source_code = context_bundle.kernel_info.source_code
             func_name = context_bundle.kernel_info.function_name
@@ -216,10 +234,10 @@ triton.autotune = _patched_autotune
             embedded_code += "\n" + source_code
             embedded_code += f"\n\n# Use kernel function directly\nimported_kernel_function = {func_name}"
 
-            return code.replace("# {{KERNEL_IMPORT_PLACEHOLDER}}", embedded_code)
+            return code.replace(self.KERNEL_IMPORT_PLACEHOLDER, embedded_code)
         elif kernel_import == KernelImportMode.OVERRIDE_TTIR:
             comment = "# Kernel import skipped - using IR override mode with TTIR"
-            return code.replace("# {{KERNEL_IMPORT_PLACEHOLDER}}", comment)
+            return code.replace(self.KERNEL_IMPORT_PLACEHOLDER, comment)
         else:
             raise ValueError(f"Unknown kernel_import mode: {kernel_import}")
 
@@ -228,7 +246,7 @@ triton.autotune = _patched_autotune
     ) -> str:
         """Replace the utility functions placeholder with extracted functions."""
         utility_code = extract_utility_functions()
-        return code.replace("# {{UTILITY_FUNCTIONS_PLACEHOLDER}}", utility_code)
+        return code.replace(self.UTILITY_FUNCTIONS_PLACEHOLDER, utility_code)
 
     def _replace_kernel_invocation(
         self, code: str, context_bundle: ContextBundle, **kwargs
@@ -237,4 +255,4 @@ triton.autotune = _patched_autotune
         source_code = context_bundle.kernel_info.source_code
         pos_args, kw_args = _parse_kernel_signature(source_code)
         invocation_snippet = _generate_invocation_snippet(pos_args, kw_args)
-        return code.replace("# {{KERNEL_INVOCATION_PLACEHOLDER}}", invocation_snippet)
+        return code.replace(self.KERNEL_INVOCATION_PLACEHOLDER, invocation_snippet)

@@ -23,7 +23,7 @@ def reproduce(
     template: str,
     replacer: Optional[PlaceholderReplacer] = None,
     kernel_import: KernelImportMode = KernelImportMode.DEFAULT,
-) -> dict[str, Path]:
+) -> dict[str, str]:
     """
     Generate a reproducer script from NDJSON trace file.
 
@@ -45,7 +45,7 @@ def reproduce(
         f"Built context bundle for kernel: {context_bundle.kernel_info.function_name}"
     )
     out_py_path, temp_json_path = determine_output_paths(
-        out_dir, context_bundle.kernel_info.function_name
+        out_dir, context_bundle.kernel_info.function_name, template
     )
     save_prettified_json(context_bundle.raw_launch_event, temp_json_path)
 

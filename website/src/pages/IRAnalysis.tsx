@@ -50,19 +50,19 @@ const IRAnalysis: React.FC<IRAnalysisProps> = ({ kernels, selectedKernel }) => {
                 {ttgir_info && (
                   <>
                     <div className="flex flex-col">
-                      <span className="text-sm font-medium text-gray-500">Tiled Buffer Load Count</span>
+                      <span className="text-sm font-medium text-gray-500">Tiled Global Load Count</span>
                       <span className="font-mono text-sm break-words">{getCount(ttgir_info, "tt.load_count")}</span>
                     </div>
                     <div className="flex flex-col">
-                      <span className="text-sm font-medium text-gray-500">Tiled Buffer Store Count</span>
+                      <span className="text-sm font-medium text-gray-500">Tiled Global Store Count</span>
                       <span className="font-mono text-sm break-words">{getCount(ttgir_info, "tt.store_count")}</span>
                     </div>
                     <div className="flex flex-col">
-                      <span className="text-sm font-medium text-gray-500">Tiled Global Load Count</span>
+                      <span className="text-sm font-medium text-gray-500">Tiled Buffer Load Count</span>
                       <span className="font-mono text-sm break-words">{getCount(ttgir_info, "amdgpu.buffer_load_count")}</span>
                     </div>
                     <div className="flex flex-col">
-                      <span className="text-sm font-medium text-gray-500">Tiled Global Store Count</span>
+                      <span className="text-sm font-medium text-gray-500">Tiled Buffer Store Count</span>
                       <span className="font-mono text-sm break-words">{getCount(ttgir_info, "amdgpu.buffer_store_count")}</span>
                     </div>
                   </>
