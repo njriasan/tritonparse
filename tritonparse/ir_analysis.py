@@ -190,7 +190,7 @@ def find_loop_pipelining(
         return op + " "
 
     # Step 1: Find tt.load and tt.dot operations in TTIR loop
-    ttir_lines: list[int] = []
+    ttir_pipeline_lines: list[int] = []
     pipeline_tt_ops = ["tt.load", "tt.dot"]
     pipeline_tt_ops = [apply_trailing_space(op) for op in pipeline_tt_ops]
     pipeline_ttgir_ops = [
@@ -205,7 +205,7 @@ def find_loop_pipelining(
         line = ttir_lines[line_idx]
         for op in pipeline_tt_ops:
             if op in line:
-                ttir_lines.append(line_idx)
+                ttir_pipeline_lines.append(line_idx)
                 break
 
     # Step 2: Find the corresponding loop in TTGIR using source mappings
@@ -231,7 +231,7 @@ def find_loop_pipelining(
     loop_body_ops: list[tuple[int, str]] = []
     epilogue_ops: list[tuple[int, str]] = []
 
-    for ttir_line in ttir_lines:
+    for ttir_line in ttir_pipeline_lines:
         # Convert 0-indexed line to 1-indexed string key for mapping lookup
         ttir_line_key = str(ttir_line + 1)
 
