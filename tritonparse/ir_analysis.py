@@ -201,7 +201,6 @@ def find_loop_pipelining(
         "warp_group_dot",
     ]
     pipeline_ttgir_ops = [apply_trailing_space(op) for op in pipeline_ttgir_ops]
-
     for line_idx in range(ttir_loop_start, min(ttir_loop_end + 1, len(ttir_lines))):
         line = ttir_lines[line_idx]
         for op in pipeline_tt_ops:
@@ -351,6 +350,8 @@ def generate_loop_schedule(
 
     # Find only inner loops (loops without nested loops inside)
     inner_loop_bounds = find_inner_loop_bounds(ttir_content)
+    # TODO: Fix loop mapping with multiple loops.
+    inner_loop_bounds = inner_loop_bounds[:1]
 
     # For each inner loop, find pipelining information
     loop_schedules = []
